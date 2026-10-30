@@ -1,0 +1,107 @@
+{
+  "name": "smart-commit-generator",
+  "displayName": "Smart Commit Generator",
+  "description": "Fast & accurate AI Git commit message generator powered by OpenAI & Google Gemini",
+  "version": "1.0.0",
+  "publisher": "hessam",
+  "author": {
+    "name": "Hessam Barasm Mamagani",
+    "email": "hessam.mamagani@gmail.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hessam-Mamagani/smart-commit-generator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Hessam-Mamagani/smart-commit-generator/issues"
+  },
+  "homepage": "https://github.com/Hessam-Mamagani/smart-commit-generator#readme",
+  "keywords": [
+    "git",
+    "commit",
+    "ai",
+    "openai",
+    "gemini",
+    "conventional-commits",
+    "scm",
+    "productivity"
+  ],
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "smartCommit.generate",
+        "title": "Smart Commit: Generate Message",
+        "icon": "$(sparkle)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "smartCommit.generate",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g"
+      }
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "smartCommit.generate",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "smartCommit.generate",
+          "when": "view == workbench.scm",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Smart Commit Generator",
+      "properties": {
+        "smartCommit.provider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "gemini"
+          ],
+          "default": "openai",
+          "description": "Provider to use: 'openai' (gpt-4o-mini) or 'gemini' (gemini-3.8-flash)."
+        },
+        "smartCommit.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API Key."
+        },
+        "smartCommit.geminiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Google Gemini API Key."
+        },
+        "smartCommit.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model override (leave blank to use provider defaults: gpt-4o-mini or gemini-3.8-flash)."
+        },
+        "smartCommit.autoStage": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically stage all modified files if nothing is staged before generating."
+        }
+      }
+    }
+  }
+}
