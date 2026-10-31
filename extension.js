@@ -487,7 +487,21 @@ function calculateNextVersions(currentVersion, commitLog = '') {
 async function applyVersionBump(pkgInfo, newVersion, cwd) {
   try {
     pkgInfo.pkg.version = newVersion;
-    fs.writeFileSync(pkgInfo.pkgPath, JSON.stringify(pkgInfo.pkg, null, 2) + '\n', 'utf8');
+    const jsonStr = JSON.stringify(pkgInfo.pkg, null, 2) + '\n';
+    fs.writeFileSync(pkgInfo.pkgPath, jsonStr, 'utf8');
+    try {
+      const userHome = process.env.USERPROFILE || process.env.HOME || '';
+      const localTargets = [
+        path.join(userHome, '.antigravity-ide', 'extensions', 'smart-commit-generator', 'package.json'),
+        path.join(userHome, '.antigravity', 'extensions', 'smart-commit-generator', 'package.json'),
+        path.join(userHome, '.vscode', 'extensions', 'smart-commit-generator', 'package.json')
+      ];
+      for (const target of localTargets) {
+        if (fs.existsSync(path.dirname(target))) {
+          fs.writeFileSync(target, jsonStr, 'utf8');
+        }
+      }
+    } catch (e) {}
     await runGit(['add', 'package.json'], cwd);
     await runGit(['commit', '-m', `chore(release): bump version to ${newVersion}`], cwd);
     return true;

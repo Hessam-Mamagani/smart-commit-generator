@@ -1,6 +1,6 @@
 # Smart Commit Generator AI
 
-[![Version](https://img.shields.io/visual-studio-marketplace/v/Hessam-Mamagani.smart-commit-generator-ai?style=flat-square&color=blue&label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=Hessam-Mamagani.smart-commit-generator-ai)
+[![Version](https://img.shields.io/vscode-marketplace/v/Hessam-Mamagani.smart-commit-generator-ai?style=flat-square&color=blue&label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=Hessam-Mamagani.smart-commit-generator-ai)
 [![Open VSX](https://img.shields.io/open-vsx/v/Hessam-Mamagani/smart-commit-generator-ai?style=flat-square&color=purple&label=Open%20VSX)](https://open-vsx.org/extension/Hessam-Mamagani/smart-commit-generator-ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE.txt)
 
@@ -30,14 +30,14 @@
 
 Six dedicated action buttons are built right into your **Source Control** view header:
 
-|   #   |          Icon          | Action                       |                    Shortcut                     | Description                                                                                |
-| :---: | :--------------------: | :--------------------------- | :---------------------------------------------: | :----------------------------------------------------------------------------------------- |
-| **1** |      `$(sparkle)`      | **Generate Message**         | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> | Inspects staged diff and populates the commit box with Conventional Commits.               |
-| **2** |   `$(cloud-upload)`    | **Generate, Commit & Push**  | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | Stages modified files, generates message, commits, and pushes to remote in 1 click.        |
-| **3** |     `$(git-merge)`     | **Safe Sync to Branch**      | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd> | Conflict-safe branch merge & push with auto semver release bump (e.g. `main` ➔ `publish`). |
-| **4** | `$(git-pull-request)`  | **Generate PR Description**  |                        —                        | Drafts full markdown Pull Request description and copies to clipboard.                     |
-| **5** |       `$(diff)`        | **Compare & Security Audit** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | Compares branches, checks conflicts, scans for leaked API keys, and offers 1-click push.   |
-| **6** | `$(shield)` / `$(zap)` | **Toggle Fast / Safe Mode**  | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd> | Flips visually between Safe Mode (modal confirmation) and Fast Mode (instant push).        |
+| # | Button | Action | Shortcut | Description |
+| :-: | :-: | :--- | :-: | :--- |
+| **1** | ![Generate](images/icons/btn-1-generate.png) | **Generate Message** | <kbd>Ctrl+Alt+G</kbd> | Inspects staged diff and populates the commit box with Conventional Commits. |
+| **2** | ![Commit & Push](images/icons/btn-2-commit-push.png) | **Generate, Commit & Push** | <kbd>Ctrl+Alt+P</kbd> | Stages modified files, generates message, commits, and pushes to remote in 1 click. |
+| **3** | ![Safe Sync](images/icons/btn-3-branch-sync.png) | **Safe Sync to Branch** | <kbd>Ctrl+Alt+S</kbd> | Conflict-safe branch merge & push with auto semver release bump (e.g. `main` ➔ `publish`). |
+| **4** | ![Generate PR](images/icons/btn-4-generate-pr.png) | **Generate PR Description** | — | Drafts full markdown Pull Request description and copies to clipboard. |
+| **5** | ![Compare & Audit](images/icons/btn-5-compare.png) | **Compare & Security Audit** | <kbd>Ctrl+Alt+C</kbd> | Compares branches, checks conflicts, scans for leaked API keys, and offers 1-click push. |
+| **6** | ![Fast Mode Toggle](images/icons/btn-6-fast-mode.png) | **Toggle Fast / Safe Mode** | <kbd>Ctrl+Alt+T</kbd> | Flips visually between Safe Mode (modal confirmation) and Fast Mode (instant push). |
 
 ---
 
