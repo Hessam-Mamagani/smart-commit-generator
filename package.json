@@ -2,7 +2,7 @@
   "name": "smart-commit-generator-ai",
   "displayName": "Smart Commit Generator AI",
   "description": "Fast & accurate AI Git commit message generator powered by OpenAI & Google Gemini",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "publisher": "Hessam-Mamagani",
   "author": {
     "name": "Hessam Barasm Mamagani",
