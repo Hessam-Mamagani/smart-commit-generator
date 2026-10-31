@@ -1,0 +1,34 @@
+name: Publish Extension
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Publish to Marketplaces
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for Microsoft Marketplace Trusted Publishing (OIDC)
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Publish to VS Code Marketplace (Trusted Publishing)
+        run: npx @vscode/vsce publish --no-dependencies
+
+      - name: Publish to Open VSX Registry
+        run: npx ovsx publish --no-dependencies -p ${{ secrets.OVSX_PAT }}
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
