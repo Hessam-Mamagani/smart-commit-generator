@@ -12,8 +12,8 @@
 
 - **Strict Diff Inspection**: Reads your exact line additions and deletions—never assumes changes from file names or unrelated code.
 - **Conventional Commits**: Produces standardized headers (`feat`, `fix`, `refactor`, `perf`, `docs`, `chore`, etc.) under 72 characters, with optional bullet points for multi-part edits.
-- **⚡ Fast Mode vs 🛡️ Safe Mode Toggle**: Switch between instant 1-click push (zero dialogs) and safe review mode with a single click.
-- **Safe Branch Sync & Push (`$(repo-sync)`)**: Automatically verifies zero merge conflicts in memory with `git merge-tree` before syncing and pushing changes to any target branch (e.g. `publish`, `dev`, `staging`).
+- **Fast Mode vs Safe Mode Toggle**: Switch between instant 1-click push (zero dialogs) and safe review mode with a single click.
+- **Safe Branch Sync & Push (`$(git-merge)`)**: Automatically verifies zero merge conflicts in memory with `git merge-tree` before syncing and pushing changes to any target branch (e.g. `publish`, `dev`, `staging`).
 - **One-Click Commit & Push**: Stage, generate, commit, and push to your remote repository in a single click with built-in preview and safety confirmation.
 - **Pull Request (PR) Generator**: Compares your working branch against `main` or `master` to generate a comprehensive markdown PR description with summary, key changes, and verification checklist.
 - **Branch Compare & AI Conflict Advisor**: Dry-run merge check between any two branches. Identifies conflicts before they happen and provides production-ready merged code solutions.
@@ -26,18 +26,18 @@
 
 ## Source Control Toolbar Actions
 
-![Smart Git Source Control Toolbar](images/toolbar.png)
+![Smart Git Source Control Toolbar](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/toolbar.png)
 
 Six dedicated action buttons are built right into your **Source Control** view header:
 
 | # | Button | Action | Shortcut | Description |
 | :-: | :-: | :--- | :-: | :--- |
-| **1** | ![Generate](images/icons/btn-1-generate.png) | **Generate Message** | <kbd>Ctrl+Alt+G</kbd> | Inspects staged diff and populates the commit box with Conventional Commits. |
-| **2** | ![Commit & Push](images/icons/btn-2-commit-push.png) | **Generate, Commit & Push** | <kbd>Ctrl+Alt+P</kbd> | Stages modified files, generates message, commits, and pushes to remote in 1 click. |
-| **3** | ![Safe Sync](images/icons/btn-3-branch-sync.png) | **Safe Sync to Branch** | <kbd>Ctrl+Alt+S</kbd> | Conflict-safe branch merge & push with auto semver release bump (e.g. `main` ➔ `publish`). |
-| **4** | ![Generate PR](images/icons/btn-4-generate-pr.png) | **Generate PR Description** | — | Drafts full markdown Pull Request description and copies to clipboard. |
-| **5** | ![Compare & Audit](images/icons/btn-5-compare.png) | **Compare & Security Audit** | <kbd>Ctrl+Alt+C</kbd> | Compares branches, checks conflicts, scans for leaked API keys, and offers 1-click push. |
-| **6** | ![Fast Mode Toggle](images/icons/btn-6-fast-mode.png) | **Toggle Fast / Safe Mode** | <kbd>Ctrl+Alt+T</kbd> | Flips visually between Safe Mode (modal confirmation) and Fast Mode (instant push). |
+| **1** | ![Generate](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-1-generate.png) | **Generate Message** | <kbd>Ctrl+Alt+G</kbd> | Inspects staged diff and populates the commit box with Conventional Commits. |
+| **2** | ![Commit & Push](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-2-commit-push.png) | **Generate, Commit & Push** | <kbd>Ctrl+Alt+P</kbd> | Stages modified files, generates message, commits, and pushes to remote in 1 click. |
+| **3** | ![Safe Sync](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-3-branch-sync.png) | **Safe Sync to Branch** | <kbd>Ctrl+Alt+S</kbd> | Conflict-safe branch merge & push with auto semver release bump (e.g. `main` ➔ `publish`). |
+| **4** | ![Generate PR](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-4-generate-pr.png) | **Generate PR Description** | — | Drafts full markdown Pull Request description and copies to clipboard. |
+| **5** | ![Compare & Audit](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-5-compare.png) | **Compare & Security Audit** | <kbd>Ctrl+Alt+C</kbd> | Compares branches, checks conflicts, scans for leaked API keys, and offers 1-click push. |
+| **6** | ![Fast Mode Toggle](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-6-fast-mode.png) | **Toggle Fast / Safe Mode** | <kbd>Ctrl+Alt+T</kbd> | Flips visually between Safe Mode (modal confirmation) and Fast Mode (instant push). |
 
 ---
 
@@ -58,7 +58,7 @@ Six dedicated action buttons are built right into your **Source Control** view h
 
 ### 3. Safe Branch Sync & Push
 
-1. Click the **sync icon** (`$(repo-sync)`) or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd>.
+1. Click the **safe branch sync icon** (`$(git-merge)`) or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd>.
 2. Select your target branch (e.g., `publish` to release, or `staging`).
 3. The extension tests for merge conflicts in memory:
    - **Zero conflicts**: Safely switches, merges, pushes to remote, and returns to your working branch.
@@ -72,7 +72,7 @@ Six dedicated action buttons are built right into your **Source Control** view h
 
 ### 5. Branch Compare, Security Audit & Direct Push
 
-1. Click the **git compare icon** (`$(git-compare)`) or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd>.
+1. Click the **branch compare icon** (`$(diff)`) or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd>.
 2. Select any target branch to compare against.
 3. Automatically runs:
    - **Merge conflict dry-run** (`git merge-tree`).
