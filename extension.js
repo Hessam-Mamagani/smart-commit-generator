@@ -83,6 +83,8 @@ High-level summary of the development scope, goals, and differences between thes
 
 Output strictly formatted GitHub Markdown.`;
 
+let globalNotifyAllViews = null;
+
 function getSetting(key) {
   const config = vscode.workspace.getConfiguration("smartCommit");
   let val = config.get(key);
@@ -1979,6 +1981,8 @@ Write a comprehensive branch comparison and architecture report:`;
     actionsViewScmProvider.updateState(extra);
   }
 
+  globalNotifyAllViews = notifyAllViews;
+
   // 11. Command: Select Active Repository
   const disposableSelectRepo = vscode.commands.registerCommand(
     "smartCommit.selectRepository",
@@ -2361,6 +2365,128 @@ class SmartGitViewProvider {
         case "switchBranch":
           vscode.commands.executeCommand("smartCommit.switchBranch");
           break;
+        case "stageFile": {
+          try {
+            const repo = getTargetRepository();
+            if (!repo) break;
+            const cwd = repo.rootUri.fsPath;
+            await runGit(["add", "--", data.relPath], cwd);
+            if (globalNotifyAllViews) globalNotifyAllViews();
+            else this.updateState();
+          } catch (err) {
+            vscode.window.showErrorMessage(
+              `Smart Git: Could not stage "${data.relPath}": ${err.message}`,
+            );
+          }
+          break;
+        }
+        case "unstageFile": {
+          try {
+            const repo = getTargetRepository();
+            if (!repo) break;
+            const cwd = repo.rootUri.fsPath;
+            try {
+              await runGit(["restore", "--staged", "--", data.relPath], cwd);
+            } catch (e) {
+              await runGit(["reset", "HEAD", "--", data.relPath], cwd);
+            }
+            if (globalNotifyAllViews) globalNotifyAllViews();
+            else this.updateState();
+          } catch (err) {
+            vscode.window.showErrorMessage(
+              `Smart Git: Could not unstage "${data.relPath}": ${err.message}`,
+            );
+          }
+          break;
+        }
+        case "discardFile": {
+          try {
+            const repo = getTargetRepository();
+            if (!repo) break;
+            const cwd = repo.rootUri.fsPath;
+            const fileName = path.basename(data.relPath);
+            const answer = await vscode.window.showWarningMessage(
+              `Are you sure you want to discard changes in "${fileName}"? This cannot be undone.`,
+              { modal: true },
+              "Discard Changes",
+            );
+            if (answer !== "Discard Changes") break;
+
+            if (data.status === "U") {
+              const fullPath = path.join(cwd, data.relPath);
+              if (fs.existsSync(fullPath)) {
+                fs.rmSync(fullPath, { recursive: true, force: true });
+              }
+            } else {
+              try {
+                await runGit(
+                  ["restore", "--staged", "--worktree", "--", data.relPath],
+                  cwd,
+                );
+              } catch (e) {
+                await runGit(["checkout", "HEAD", "--", data.relPath], cwd);
+              }
+            }
+            vscode.window.showInformationMessage(
+              `Smart Git: Discarded changes in "${fileName}".`,
+            );
+            if (globalNotifyAllViews) globalNotifyAllViews();
+            else this.updateState();
+          } catch (err) {
+            vscode.window.showErrorMessage(
+              `Smart Git: Could not discard "${data.relPath}": ${err.message}`,
+            );
+          }
+          break;
+        }
+        case "stageAll": {
+          try {
+            const repo = getTargetRepository();
+            if (!repo) break;
+            const cwd = repo.rootUri.fsPath;
+            await runGit(["add", "-A"], cwd);
+            if (globalNotifyAllViews) globalNotifyAllViews();
+            else this.updateState();
+          } catch (err) {
+            vscode.window.showErrorMessage(
+              `Smart Git: Could not stage all: ${err.message}`,
+            );
+          }
+          break;
+        }
+        case "discardAll": {
+          try {
+            const repo = getTargetRepository();
+            if (!repo) break;
+            const cwd = repo.rootUri.fsPath;
+            const answer = await vscode.window.showWarningMessage(
+              `Are you sure you want to DISCARD ALL changes across all files? This cannot be undone.`,
+              { modal: true },
+              "Discard All Changes",
+            );
+            if (answer !== "Discard All Changes") break;
+
+            try {
+              await runGit(["restore", "--staged", "--worktree", "."], cwd);
+            } catch (e) {
+              await runGit(["checkout", "HEAD", "--", "."], cwd);
+            }
+            try {
+              await runGit(["clean", "-fd"], cwd);
+            } catch (e) {}
+
+            vscode.window.showInformationMessage(
+              "Smart Git: Discarded all changes.",
+            );
+            if (globalNotifyAllViews) globalNotifyAllViews();
+            else this.updateState();
+          } catch (err) {
+            vscode.window.showErrorMessage(
+              `Smart Git: Could not discard all: ${err.message}`,
+            );
+          }
+          break;
+        }
         case "openFile":
           try {
             const repo = getTargetRepository();
@@ -2617,6 +2743,26 @@ class SmartGitViewProvider {
     .pill {
       display: inline-flex;
       align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: var(--vscode-badge-background, #333);
+      color: var(--vscode-badge-foreground, #fff);
+      cursor: pointer;
+      border: 1px solid var(--vscode-widget-border, transparent);
+      transition: opacity 0.15s ease, transform 0.1s ease;
+      white-space: nowrap;
+    }
+    .pill-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    /*
+      display: inline-flex;
+      align-items: center;
       gap: 4px;
       font-size: 11px;
       padding: 3px 8px;
@@ -2628,6 +2774,7 @@ class SmartGitViewProvider {
       transition: opacity 0.15s ease, transform 0.1s ease;
       white-space: nowrap;
     }
+    */
     .pill:hover {
       opacity: 0.85;
       transform: translateY(-1px);
@@ -2833,6 +2980,14 @@ class SmartGitViewProvider {
       opacity: 1;
       background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.1));
     }
+    .changes-action-btn-danger:hover {
+      color: #f14c4c;
+      background: rgba(241, 76, 76, 0.15);
+    }
+    .changes-action-btn-success:hover {
+      color: #73c991;
+      background: rgba(115, 201, 145, 0.15);
+    }
     .files-list {
       max-height: 180px;
       overflow-y: auto;
@@ -2905,6 +3060,25 @@ class SmartGitViewProvider {
       background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.15));
       border-color: var(--vscode-widget-border, rgba(255, 255, 255, 0.2));
     }
+    .file-action-btn-staged {
+      color: #73c991;
+      opacity: 0.95;
+    }
+    .file-action-btn-staged:hover {
+      color: #ff7b72;
+      background: rgba(255, 123, 114, 0.15);
+      border-color: rgba(255, 123, 114, 0.3);
+    }
+    .file-action-btn-stage:hover {
+      color: #73c991;
+      background: rgba(115, 201, 145, 0.15);
+      border-color: rgba(115, 201, 145, 0.3);
+    }
+    .file-action-btn-discard:hover {
+      color: #f14c4c;
+      background: rgba(241, 76, 76, 0.15);
+      border-color: rgba(241, 76, 76, 0.3);
+    }
     .status-badge {
       font-size: 11px;
       font-weight: 700;
@@ -2961,6 +3135,9 @@ class SmartGitViewProvider {
       </div>
     </div>
     <div class="pill pill-safe" id="modePill" title="Click to toggle Safe / Fast Mode">
+      <span class="pill-icon" id="modeIcon">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c-.3 0-.6.1-.8.3L1.7 3.5C1.3 3.8 1 4.3 1 4.8v4.5c0 4.2 3.1 6.5 6.6 6.7h.8c3.5-.2 6.6-2.5 6.6-6.7V4.8c0-.5-.3-1-.7-1.3L8.8.3C8.6.1 8.3 0 8 0zm0 1.5l5 2.5v5.3c0 3.2-2.3 5-5 5.2-2.7-.2-5-2-5-5.2V4l5-2.5z"/></svg>
+      </span>
       <span id="modeText">Safe Mode</span>
     </div>
   </div>
@@ -3054,6 +3231,12 @@ class SmartGitViewProvider {
         <span class="changes-count-badge" id="changesCountBadge">0</span>
       </div>
       <div class="changes-actions">
+        <span class="changes-action-btn changes-action-btn-success" id="btnStageAll" title="Stage All Changes (Accept All)">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
+        </span>
+        <span class="changes-action-btn changes-action-btn-danger" id="btnDiscardAll" title="Discard All Changes...">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 3.5a.75.75 0 0 0-1.28-.53l-3 3a.75.75 0 0 0 0 1.06l3 3a.75.75 0 0 0 1.28-.53V7.75h4.75a4.5 4.5 0 0 1 4.5 4.5v.75a.75.75 0 0 0 1.5 0v-.75a6 6 0 0 0-6-6H4.5V3.5z"/></svg>
+        </span>
         <span class="changes-action-btn" id="btnRefreshFiles" title="Refresh changed files">&#8635;</span>
       </div>
     </div>
@@ -3187,7 +3370,47 @@ class SmartGitViewProvider {
         const actions = document.createElement('div');
         actions.className = 'file-actions';
 
-        // 1. "Open File" button (file editor icon)
+        // 1. Stage / Accept button (or Unstage if already staged)
+        const btnStage = document.createElement('button');
+        if (file.isStaged) {
+          btnStage.className = 'file-action-btn file-action-btn-staged';
+          btnStage.title = 'Unstage changes in ' + file.fileName;
+          btnStage.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/></svg>';
+          btnStage.addEventListener('click', (e) => {
+            e.stopPropagation();
+            vscode.postMessage({
+              command: 'unstageFile',
+              relPath: file.relPath
+            });
+          });
+        } else {
+          btnStage.className = 'file-action-btn file-action-btn-stage';
+          btnStage.title = 'Stage / Accept changes in ' + file.fileName;
+          btnStage.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>';
+          btnStage.addEventListener('click', (e) => {
+            e.stopPropagation();
+            vscode.postMessage({
+              command: 'stageFile',
+              relPath: file.relPath
+            });
+          });
+        }
+
+        // 2. Discard button
+        const btnDiscard = document.createElement('button');
+        btnDiscard.className = 'file-action-btn file-action-btn-discard';
+        btnDiscard.title = 'Discard changes in ' + file.fileName + '...';
+        btnDiscard.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 3.5a.75.75 0 0 0-1.28-.53l-3 3a.75.75 0 0 0 0 1.06l3 3a.75.75 0 0 0 1.28-.53V7.75h4.75a4.5 4.5 0 0 1 4.5 4.5v.75a.75.75 0 0 0 1.5 0v-.75a6 6 0 0 0-6-6H4.5V3.5z"/></svg>';
+        btnDiscard.addEventListener('click', (e) => {
+          e.stopPropagation();
+          vscode.postMessage({
+            command: 'discardFile',
+            relPath: file.relPath,
+            status: file.status
+          });
+        });
+
+        // 3. "Open File" button (file editor icon)
         const btnOpenFile = document.createElement('button');
         btnOpenFile.className = 'file-action-btn';
         btnOpenFile.title = 'Open ' + file.fileName + ' in editor';
@@ -3228,8 +3451,13 @@ class SmartGitViewProvider {
           });
         });
 
-        actions.appendChild(btnOpenFile);
+        actions.appendChild(btnStage);
+        actions.appendChild(btnDiscard);
         actions.appendChild(btnOpenDiff);
+        actions.appendChild(btnOpenFile);
+        /*
+        actions.appendChild(btnOpenDiff);
+        */
         actions.appendChild(badgeSpan);
 
         item.appendChild(info);
@@ -3248,6 +3476,22 @@ class SmartGitViewProvider {
       chevron.classList.toggle('collapsed');
     });
 
+    const btnStageAll = document.getElementById('btnStageAll');
+    if (btnStageAll) {
+      btnStageAll.addEventListener('click', (e) => {
+        e.stopPropagation();
+        vscode.postMessage({ command: 'stageAll' });
+      });
+    }
+
+    const btnDiscardAll = document.getElementById('btnDiscardAll');
+    if (btnDiscardAll) {
+      btnDiscardAll.addEventListener('click', (e) => {
+        e.stopPropagation();
+        vscode.postMessage({ command: 'discardAll' });
+      });
+    }
+
     document.getElementById('btnRefreshFiles').addEventListener('click', (e) => {
       e.stopPropagation();
       vscode.postMessage({ command: 'refresh' });
@@ -3258,6 +3502,20 @@ class SmartGitViewProvider {
       if (msg.type === 'update') {
         document.getElementById('providerText').textContent = msg.provider || 'AI';
         const modePill = document.getElementById('modePill');
+        const modeIcon = document.getElementById('modeIcon');
+        const modeText = document.getElementById('modeText');
+        const SHIELD_ICON = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c-.3 0-.6.1-.8.3L1.7 3.5C1.3 3.8 1 4.3 1 4.8v4.5c0 4.2 3.1 6.5 6.6 6.7h.8c3.5-.2 6.6-2.5 6.6-6.7V4.8c0-.5-.3-1-.7-1.3L8.8.3C8.6.1 8.3 0 8 0zm0 1.5l5 2.5v5.3c0 3.2-2.3 5-5 5.2-2.7-.2-5-2-5-5.2V4l5-2.5z"/></svg>';
+        const ZAP_ICON = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8.5 0L1 9h5v7l7.5-9H8.5V0z"/></svg>';
+        if (msg.isFast) {
+          modePill.className = 'pill pill-fast';
+          if (modeIcon) modeIcon.innerHTML = ZAP_ICON;
+          modeText.textContent = 'Fast Mode';
+        } else {
+          modePill.className = 'pill pill-safe';
+          if (modeIcon) modeIcon.innerHTML = SHIELD_ICON;
+          modeText.textContent = 'Safe Mode';
+        }
+        /*
         const modeText = document.getElementById('modeText');
         if (msg.isFast) {
           modePill.className = 'pill pill-fast';
@@ -3266,6 +3524,7 @@ class SmartGitViewProvider {
           modePill.className = 'pill pill-safe';
           modeText.textContent = 'Safe Mode';
         }
+        */
         if (msg.repoName) {
           document.getElementById('repoName').textContent = msg.repoName + (msg.repoCount > 1 ? ' ▾' : '');
         }

@@ -6,6 +6,15 @@ All notable changes to the "Smart Commit Generator AI" extension will be documen
 
 All notable changes to the "Smart Commit Generator AI" extension will be documented in this file.
 
+## [1.4.2] - 2026-11-01
+
+### Added
+- **Per-File Accept & Discard Actions**: One-click **Stage / Accept** (`+` to stage, active green `✓` to unstage) and **Discard Changes** (`↶` with safety confirmation modal) directly from the Changes file explorer list.
+- **Batch Stage All & Discard All**: Added header quick-action buttons (`+` Stage All, `↶` Discard All) alongside the file counter badge.
+- **Dynamic Safe / Fast Mode Chip Iconography**: Integrated vector shield (`🛡️`) and lightning (`⚡`) icons inside the Safe / Fast Mode pill in the header bar.
+
+---
+
 ## [1.4.0] - 2026-11-01
 
 ### Added
