@@ -29,10 +29,11 @@ jobs:
           node-version: 20
 
       - name: Publish to VS Code Marketplace (Trusted Publishing)
+        continue-on-error: true
         run: npx @vscode/vsce@latest publish --oidc --no-dependencies
 
       - name: Publish to Open VSX Registry
+        continue-on-error: true
         run: npx ovsx publish --no-dependencies -p ${{ secrets.OVSX_PAT }}
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
-
