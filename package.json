@@ -2,7 +2,7 @@
   "name": "smart-commit-generator-ai",
   "displayName": "Smart Commit Generator AI",
   "description": "Fast & accurate AI Git commit message generator powered by OpenAI & Google Gemini",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "Hessam-Mamagani",
   "author": {
     "name": "Hessam Barasm Mamagani",
@@ -24,6 +24,8 @@
     "openai",
     "gemini",
     "conventional-commits",
+    "pull-request",
+    "push",
     "scm",
     "productivity"
   ],
@@ -45,6 +47,16 @@
         "command": "smartCommit.generate",
         "title": "Smart Commit: Generate Message",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "smartCommit.generateCommitAndPush",
+        "title": "Smart Commit: Generate, Commit & Push",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "smartCommit.generatePR",
+        "title": "Smart Commit: Generate PR Description",
+        "icon": "$(git-pull-request)"
       }
     ],
     "keybindings": [
@@ -52,20 +64,43 @@
         "command": "smartCommit.generate",
         "key": "ctrl+alt+g",
         "mac": "cmd+alt+g"
+      },
+      {
+        "command": "smartCommit.generateCommitAndPush",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p"
       }
     ],
     "menus": {
       "scm/title": [
         {
           "command": "smartCommit.generate",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "smartCommit.generateCommitAndPush",
+          "group": "navigation@2"
+        },
+        {
+          "command": "smartCommit.generatePR",
+          "group": "navigation@3"
         }
       ],
       "view/title": [
         {
           "command": "smartCommit.generate",
           "when": "view == workbench.scm",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "smartCommit.generateCommitAndPush",
+          "when": "view == workbench.scm",
+          "group": "navigation@2"
+        },
+        {
+          "command": "smartCommit.generatePR",
+          "when": "view == workbench.scm",
+          "group": "navigation@3"
         }
       ]
     },
@@ -100,6 +135,16 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically stage all modified files if nothing is staged before generating."
+        },
+        "smartCommit.confirmBeforePush": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask for confirmation before automatically pushing to the remote repository."
+        },
+        "smartCommit.baseBranch": {
+          "type": "string",
+          "default": "",
+          "description": "Base branch for PR description generation (e.g., main or master). Auto-detected if left empty."
         }
       }
     }
