@@ -64,11 +64,18 @@ Six dedicated action buttons are built right into your **Source Control** view h
 2. The AI compares your working branch against `main` or `master`.
 3. Copies full Markdown PR to your clipboard and opens in a new tab.
 
-### 5. Branch Compare & AI Conflict Advisor
+### 5. Branch Compare, Security Audit & Direct Push
 1. Click the **git compare icon** (`$(git-compare)`) or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd>.
-2. Select any branch to compare against.
-3. If clean: Generates Architecture & Risk Assessment report.
-4. If conflicts: Generates file-by-file explanations and ready-to-copy merged code blocks.
+2. Select any target branch to compare against.
+3. Automatically runs:
+   - **Merge conflict dry-run** (`git merge-tree`).
+   - **Security scanner** for leaked credentials, API keys, or private tokens.
+   - **AI Architecture & Risk report** opened in your editor.
+4. If clean and ready, provides direct 1-click modal actions:
+   - **`Sync & Push to "<branch>"`**: Automatically merges and pushes right from the comparison!
+   - **`Generate PR Description`**: Formats ready-to-paste PR markdown.
+   - **`Cancel`**: Closes modal and keeps report open.
+5. If conflicts exist, blocks pushing and provides step-by-step resolution guidance.
 
 ---
 

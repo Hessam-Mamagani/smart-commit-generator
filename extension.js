@@ -401,6 +401,81 @@ async function checkMergeConflicts(cwd, currentBranch, targetBranch) {
   };
 }
 
+function scanDiffForSecurityIssues(diffText) {
+  if (!diffText) return [];
+  const issues = [];
+  const lines = diffText.split('\n');
+
+  const secretPatterns = [
+    { name: 'OpenAI Secret Key', regex: /sk-[a-zA-Z0-9]{20,}/ },
+    { name: 'Google / Gemini API Key', regex: /AIza[0-9A-Za-z\-_]{35}/ },
+    { name: 'AWS Access Key ID', regex: /AKIA[0-9A-Z]{16}/ },
+    { name: 'GitHub Personal Access Token', regex: /(?:ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{22,})/ },
+    { name: 'Private Encryption Key', regex: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/ },
+    { name: 'Hardcoded Secret / Token Assignment', regex: /(?:api[_-]?key|secret|password|auth[_-]?token)\s*[:=]\s*['"][a-zA-Z0-9_\-\.]{8,}['"]/i }
+  ];
+
+  let currentFile = '';
+  for (const line of lines) {
+    if (line.startsWith('+++ b/')) {
+      currentFile = line.replace('+++ b/', '').trim();
+      continue;
+    }
+    if (line.startsWith('+') && !line.startsWith('+++')) {
+      const addedContent = line.slice(1);
+      if (addedContent.includes('your-api-key') || addedContent.includes('sk-placeholder') || addedContent.includes('EXAMPLE')) {
+        continue;
+      }
+      for (const pattern of secretPatterns) {
+        if (pattern.regex.test(addedContent)) {
+          issues.push({
+            type: pattern.name,
+            file: currentFile || 'unknown file'
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  return issues;
+}
+
+async function executeBranchSyncAndPush(cwd, currentBranch, targetBranch) {
+  try {
+    const status = (await runGit(['status', '--short'], cwd)).trim();
+    if (status) {
+      vscode.window.showWarningMessage('Smart Git: Please commit or stash your working tree changes before syncing branches.');
+      return false;
+    }
+  } catch (e) {
+    return false;
+  }
+
+  let success = false;
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Smart Git: Merging "${currentBranch}" into "${targetBranch}" & pushing...`,
+      cancellable: false
+    },
+    async () => {
+      try {
+        await runGit(['checkout', targetBranch], cwd);
+        await runGit(['merge', currentBranch], cwd);
+        await runGit(['push', 'origin', targetBranch], cwd);
+        await runGit(['checkout', currentBranch], cwd);
+        vscode.window.showInformationMessage(`Smart Git: Successfully synced "${currentBranch}" into "${targetBranch}" and pushed to remote!`);
+        success = true;
+      } catch (err) {
+        await runGit(['checkout', currentBranch], cwd).catch(() => {});
+        vscode.window.showErrorMessage(`Smart Git Sync Error: ${err.message}`);
+      }
+    }
+  );
+  return success;
+}
+
 function updateStatusBarItem(statusBar) {
   const confirmPush = getSetting('confirmBeforePush');
   const isFast = confirmPush === false;
@@ -658,46 +733,62 @@ function activate(context) {
 
     if (!targetBranch) return;
 
-    // C. Dry-run conflict check
+    // C. Dry-run conflict & security check
+    let conflictCheck;
+    let diffBody = '';
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `Smart Git: Checking for conflicts between "${currentBranch}" and "${targetBranch}"...`,
+        title: `Smart Git: Checking conflicts and security for "${targetBranch}"...`,
         cancellable: false
       },
       async () => {
         try {
-          const conflictCheck = await checkMergeConflicts(cwd, currentBranch, targetBranch);
-          if (conflictCheck.hasConflicts) {
-            vscode.window.showErrorMessage(`Cannot sync to "${targetBranch}": Merge conflicts detected! Opening AI Conflict Advisor...`);
-            vscode.commands.executeCommand('smartCommit.compareBranches', arg);
-            return;
+          conflictCheck = await checkMergeConflicts(cwd, currentBranch, targetBranch);
+          try {
+            diffBody = await runGit(['diff', `${targetBranch}...HEAD`], cwd);
+          } catch (e) {
+            diffBody = '';
           }
-
-          // D. Safe merge and push
-          const choice = await vscode.window.showInformationMessage(
-            `Smart Git: Zero conflicts! Sync "${currentBranch}" into "${targetBranch}"?`,
-            {
-              modal: true,
-              detail: `This operation will:\n1. Switch to "${targetBranch}"\n2. Merge latest changes from "${currentBranch}"\n3. Push to remote origin\n4. Switch back to "${currentBranch}"`
-            },
-            'Sync & Push Now'
-          );
-
-          if (choice !== 'Sync & Push Now') return;
-
-          await runGit(['checkout', targetBranch], cwd);
-          await runGit(['merge', currentBranch], cwd);
-          await runGit(['push', 'origin', targetBranch], cwd);
-          await runGit(['checkout', currentBranch], cwd);
-
-          vscode.window.showInformationMessage(`Smart Git: Successfully synced "${currentBranch}" into "${targetBranch}" and pushed to remote!`);
-        } catch (err) {
-          await runGit(['checkout', currentBranch], cwd).catch(() => {});
-          vscode.window.showErrorMessage(`Smart Git Sync Error: ${err.message}`);
+        } catch (e) {
+          conflictCheck = { hasConflicts: false, mergeBase: '', output: '' };
         }
       }
     );
+
+    if (conflictCheck && conflictCheck.hasConflicts) {
+      vscode.window.showErrorMessage(`Cannot sync to "${targetBranch}": Merge conflicts detected! Opening AI Conflict Advisor...`);
+      vscode.commands.executeCommand('smartCommit.compareBranches', arg);
+      return;
+    }
+
+    const securityIssues = scanDiffForSecurityIssues(diffBody);
+    if (securityIssues.length > 0) {
+      const issueList = securityIssues.slice(0, 3).map(i => `• ${i.type} in ${i.file}`).join('\n');
+      const proceed = await vscode.window.showWarningMessage(
+        `Smart Git: ⚠️ Potential Security Warning before syncing to "${targetBranch}"!`,
+        {
+          modal: true,
+          detail: `Detected sensitive data in changes:\n${issueList}\n\nDo you want to proceed with sync and push?`
+        },
+        'Sync & Push Anyway',
+        'Cancel'
+      );
+      if (proceed !== 'Sync & Push Anyway') return;
+    } else {
+      const choice = await vscode.window.showInformationMessage(
+        `Smart Git: Zero conflicts! Sync "${currentBranch}" into "${targetBranch}"?`,
+        {
+          modal: true,
+          detail: `This operation will:\n1. Switch to "${targetBranch}"\n2. Merge latest changes from "${currentBranch}"\n3. Push to remote origin\n4. Switch back to "${currentBranch}"`
+        },
+        'Sync & Push Now',
+        'Cancel'
+      );
+      if (choice !== 'Sync & Push Now') return;
+    }
+
+    await executeBranchSyncAndPush(cwd, currentBranch, targetBranch);
   });
 
   // 7. Command: Generate Pull Request Description
@@ -837,10 +928,12 @@ Please generate the full Pull Request description:`;
 
     if (!selectedTarget) return;
 
+    let postCompareAction = null;
+
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `Smart Git: Comparing "${currentBranch}" vs "${selectedTarget}"...`,
+        title: `Smart Git: Comparing "${currentBranch}" vs "${selectedTarget}" & scanning security...`,
         cancellable: false
       },
       async () => {
@@ -852,6 +945,14 @@ Please generate the full Pull Request description:`;
             commitLog = await runGit(['log', `${selectedTarget}..HEAD`, '--oneline', '-n', '30'], cwd);
           } catch (e) {
             commitLog = await runGit(['log', '-n', '10', '--oneline'], cwd).catch(() => '');
+          }
+
+          let commitCount = 0;
+          try {
+            const countStr = await runGit(['rev-list', '--count', `${selectedTarget}..HEAD`], cwd);
+            commitCount = parseInt(countStr.trim(), 10) || 0;
+          } catch (e) {
+            commitCount = 0;
           }
 
           let diffStat = '';
@@ -868,9 +969,7 @@ Please generate the full Pull Request description:`;
             diffBody = '';
           }
 
-          if (diffBody.length > 25000) {
-            diffBody = diffBody.slice(0, 25000) + '\n\n[Diff truncated for length...]';
-          }
+          const securityIssues = scanDiffForSecurityIssues(diffBody);
 
           let reportMarkdown = '';
 
@@ -904,18 +1003,18 @@ Analyze the conflicts and provide the complete resolution guide:`;
             });
             await vscode.window.showTextDocument(doc, { preview: false });
 
-            vscode.window.showWarningMessage(
-              `Smart Git: Merge conflicts detected between "${currentBranch}" and "${selectedTarget}". AI Resolution Guide opened!`,
-              'View Source Control'
-            ).then(act => {
-              if (act === 'View Source Control') {
-                vscode.commands.executeCommand('workbench.view.scm');
-              }
-            });
+            postCompareAction = { type: 'conflict' };
 
           } else {
+            let securityNotice = '';
+            if (securityIssues.length > 0) {
+              securityNotice = `## ⚠️ Security Notice\nDetected ${securityIssues.length} potential secret(s) or sensitive string(s) in the diff:\n` +
+                securityIssues.map(i => `- **${i.type}** in \`${i.file}\``).join('\n') + '\n\n';
+            }
+
             const prompt = `Current Working Branch: ${currentBranch}
 Target Base Branch: ${selectedTarget}
+${securityIssues.length > 0 ? `SECURITY WARNING: Found ${securityIssues.length} potential secrets in diff.` : 'SECURITY: Clean, no leaked credentials detected.'}
 
 COMMITS UNIQUE TO ${currentBranch}:
 ${commitLog || '(no new commits)'}
@@ -924,7 +1023,7 @@ MODIFIED FILES STAT:
 ${diffStat || '(no files modified)'}
 
 DIFF DETAILS:
-${diffBody || '(no diff)'}
+${diffBody.slice(0, 25000) || '(no diff)'}
 
 Write a comprehensive branch comparison and architecture report:`;
 
@@ -934,26 +1033,79 @@ Write a comprehensive branch comparison and architecture report:`;
               reportMarkdown = await requestOpenAI(apiKey, modelOverride, prompt, BRANCH_COMPARE_SYSTEM_PROMPT, 1500);
             }
 
+            if (securityNotice) {
+              reportMarkdown = securityNotice + reportMarkdown;
+            }
+
             const doc = await vscode.workspace.openTextDocument({
               content: reportMarkdown,
               language: 'markdown'
             });
             await vscode.window.showTextDocument(doc, { preview: false });
 
-            vscode.window.showInformationMessage(
-              `Smart Git: Branches compared cleanly with 0 conflicts!`,
-              'Generate PR Description'
-            ).then(act => {
-              if (act === 'Generate PR Description') {
-                vscode.commands.executeCommand('smartCommit.generatePR');
-              }
-            });
+            postCompareAction = {
+              type: securityIssues.length > 0 ? 'security' : 'clean',
+              securityIssues,
+              commitCount
+            };
           }
         } catch (err) {
           vscode.window.showErrorMessage(`Smart Git Error: ${err.message}`);
         }
       }
     );
+
+    if (!postCompareAction) return;
+
+    if (postCompareAction.type === 'conflict') {
+      vscode.window.showWarningMessage(
+        `Smart Git: Merge conflicts detected between "${currentBranch}" and "${selectedTarget}"! Pushing is blocked. Review AI Resolution Guide in editor.`,
+        'Open Source Control'
+      ).then(act => {
+        if (act === 'Open Source Control') {
+          vscode.commands.executeCommand('workbench.view.scm');
+        }
+      });
+    } else if (postCompareAction.type === 'security') {
+      const issueList = postCompareAction.securityIssues.slice(0, 3).map(i => `• ${i.type} in ${i.file}`).join('\n');
+      const act = await vscode.window.showWarningMessage(
+        `Smart Git: ⚠️ Potential Security Warning detected between "${currentBranch}" and "${selectedTarget}"!`,
+        {
+          modal: true,
+          detail: `Found ${postCompareAction.securityIssues.length} potential secret(s) in branch changes:\n${issueList}\n\nReview the report before pushing to prevent credential leaks.`
+        },
+        `Sync & Push to "${selectedTarget}" Anyway`,
+        'Generate PR Description',
+        'Cancel'
+      );
+
+      if (act === `Sync & Push to "${selectedTarget}" Anyway`) {
+        await executeBranchSyncAndPush(cwd, currentBranch, selectedTarget);
+      } else if (act === 'Generate PR Description') {
+        vscode.commands.executeCommand('smartCommit.generatePR', arg);
+      }
+    } else if (postCompareAction.type === 'clean') {
+      const detailMsg = postCompareAction.commitCount > 0
+        ? `Branches: "${currentBranch}" ➔ "${selectedTarget}"\nCommits ahead: ${postCompareAction.commitCount}\nStatus: 0 conflicts, 0 security warnings.\n\nWould you like to sync "${currentBranch}" into "${selectedTarget}" and push to remote now?`
+        : `Branches: "${currentBranch}" ➔ "${selectedTarget}"\nStatus: "${selectedTarget}" is already up to date with "${currentBranch}" (0 new commits).\n0 conflicts, 0 security warnings.`;
+
+      const act = await vscode.window.showInformationMessage(
+        `Smart Git: Ready to Sync & Push! 🚀`,
+        {
+          modal: true,
+          detail: detailMsg
+        },
+        `Sync & Push to "${selectedTarget}"`,
+        'Generate PR Description',
+        'Cancel'
+      );
+
+      if (act === `Sync & Push to "${selectedTarget}"`) {
+        await executeBranchSyncAndPush(cwd, currentBranch, selectedTarget);
+      } else if (act === 'Generate PR Description') {
+        vscode.commands.executeCommand('smartCommit.generatePR', arg);
+      }
+    }
   });
 
   context.subscriptions.push(
