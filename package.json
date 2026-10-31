@@ -1,8 +1,8 @@
 {
   "name": "smart-commit-generator-ai",
   "displayName": "Smart Commit Generator AI",
-  "description": "AI Git commit message generator, 1-click push, PR generator & safe branch sync. Supports OpenAI, Free Gemini, DeepSeek, Groq & local Ollama.",
-  "version": "1.3.5",
+  "description": "AI Git commit message generator, 1-click push, PR generator & safe branch sync. Supports OpenAI, Free Gemini, DeepSeek, Groq, Grok & local Ollama.",
+  "version": "1.4.0",
   "publisher": "Hessam-Mamagani",
   "author": {
     "name": "Hessam Barasm Mamagani",
@@ -53,11 +53,48 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onView:workbench.scm"
+    "onView:workbench.scm",
+    "onView:smartCommit.actionsView",
+    "onView:smartCommit.actionsViewScm"
   ],
   "main": "./extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "smartCommitActivityBar",
+          "title": "Smart Commit Generator AI",
+          "icon": "media/activity-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "smartCommitActivityBar": [
+        {
+          "id": "smartCommit.actionsView",
+          "name": "Smart Commit Generator AI",
+          "type": "webview"
+        }
+      ],
+      "scm": [
+        {
+          "id": "smartCommit.actionsViewScm",
+          "name": "Smart Commit Generator AI",
+          "type": "webview"
+        }
+      ]
+    },
     "commands": [
+      {
+        "command": "smartCommit.selectProvider",
+        "title": "Smart Git: Select Active AI Provider",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "smartCommit.selectRepository",
+        "title": "Smart Git: Select Active Repository",
+        "icon": "$(repo)"
+      },
       {
         "command": "smartCommit.generate",
         "title": "Smart Commit: Generate Message",
@@ -102,6 +139,11 @@
         "command": "smartCommit.quickMenu",
         "title": "Smart Commit: Quick Menu",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "smartCommit.switchBranch",
+        "title": "Smart Git: Switch / Checkout Branch",
+        "icon": "$(git-branch)"
       }
     ],
     "keybindings": [
@@ -222,10 +264,11 @@
             "gemini",
             "deepseek",
             "groq",
+            "grok",
             "ollama"
           ],
           "default": "openai",
-          "description": "Provider to use: 'openai', 'gemini' (Free tier), 'deepseek', 'groq' (Free tier), or 'ollama' (local offline)."
+          "description": "Provider to use: 'openai', 'gemini' (Free tier), 'deepseek', 'groq' (Free tier), 'grok' (xAI), or 'ollama' (local offline)."
         },
         "smartCommit.openaiApiKey": {
           "type": "string",
@@ -247,6 +290,11 @@
           "default": "",
           "description": "Groq API Key (free from console.groq.com)."
         },
+        "smartCommit.grokApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "xAI Grok API Key (from console.x.ai)."
+        },
         "smartCommit.ollamaEndpoint": {
           "type": "string",
           "default": "http://localhost:11434",
@@ -255,7 +303,7 @@
         "smartCommit.model": {
           "type": "string",
           "default": "",
-          "description": "Model override (leave blank to use provider defaults: gpt-4o-mini, gemini-2.5-flash, deepseek-chat, llama-3.3-70b-versatile, or llama3.2)."
+          "description": "Model override (leave blank to use provider defaults: gpt-4o-mini, gemini-3.8-flash, deepseek-chat, llama-3.3-70b-versatile, or llama3.2)."
         },
         "smartCommit.autoStage": {
           "type": "boolean",

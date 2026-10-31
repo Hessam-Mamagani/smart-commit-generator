@@ -30,14 +30,14 @@
 
 Six dedicated action buttons are built right into your **Source Control** view header:
 
-| # | Button | Action | Shortcut | Description |
-| :-: | :-: | :--- | :-: | :--- |
-| **1** | ![Generate](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-1-generate.png) | **Generate Message** | <kbd>Ctrl+Alt+G</kbd> | Inspects staged diff and populates the commit box with Conventional Commits. |
-| **2** | ![Commit & Push](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-2-commit-push.png) | **Generate, Commit & Push** | <kbd>Ctrl+Alt+P</kbd> | Stages modified files, generates message, commits, and pushes to remote in 1 click. |
-| **3** | ![Safe Sync](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-3-branch-sync.png) | **Safe Sync to Branch** | <kbd>Ctrl+Alt+S</kbd> | Conflict-safe branch merge & push with auto semver release bump (e.g. `main` ➔ `publish`). |
-| **4** | ![Generate PR](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-4-generate-pr.png) | **Generate PR Description** | — | Drafts full markdown Pull Request description and copies to clipboard. |
-| **5** | ![Compare & Audit](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-5-compare.png) | **Compare & Security Audit** | <kbd>Ctrl+Alt+C</kbd> | Compares branches, checks conflicts, scans for leaked API keys, and offers 1-click push. |
-| **6** | ![Fast Mode Toggle](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-6-fast-mode.png) | **Toggle Fast / Safe Mode** | <kbd>Ctrl+Alt+T</kbd> | Flips visually between Safe Mode (modal confirmation) and Fast Mode (instant push). |
+|   #   |                                                               Button                                                                | Action                       |       Shortcut        | Description                                                                                |
+| :---: | :---------------------------------------------------------------------------------------------------------------------------------: | :--------------------------- | :-------------------: | :----------------------------------------------------------------------------------------- |
+| **1** |     ![Generate](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-1-generate.png)      | **Generate Message**         | <kbd>Ctrl+Alt+G</kbd> | Inspects staged diff and populates the commit box with Conventional Commits.               |
+| **2** | ![Commit & Push](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-2-commit-push.png)  | **Generate, Commit & Push**  | <kbd>Ctrl+Alt+P</kbd> | Stages modified files, generates message, commits, and pushes to remote in 1 click.        |
+| **3** |   ![Safe Sync](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-3-branch-sync.png)    | **Safe Sync to Branch**      | <kbd>Ctrl+Alt+S</kbd> | Conflict-safe branch merge & push with auto semver release bump (e.g. `main` ➔ `publish`). |
+| **4** |  ![Generate PR](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-4-generate-pr.png)   | **Generate PR Description**  |           —           | Drafts full markdown Pull Request description and copies to clipboard.                     |
+| **5** |  ![Compare & Audit](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-5-compare.png)   | **Compare & Security Audit** | <kbd>Ctrl+Alt+C</kbd> | Compares branches, checks conflicts, scans for leaked API keys, and offers 1-click push.   |
+| **6** | ![Fast Mode Toggle](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/images/icons/btn-6-fast-mode.png) | **Toggle Fast / Safe Mode**  | <kbd>Ctrl+Alt+T</kbd> | Flips visually between Safe Mode (modal confirmation) and Fast Mode (instant push).        |
 
 ---
 
@@ -45,13 +45,13 @@ Six dedicated action buttons are built right into your **Source Control** view h
 
 Smart Commit Generator AI connects directly to your preferred AI model. Three of the supported providers are **100% free with zero credit card required**:
 
-| Provider | Cost | API Key Setup | Default Model | Key Highlight |
-| :--- | :---: | :--- | :--- | :--- |
-| **Google Gemini** | **100% Free** | Free key at [Google AI Studio](https://aistudio.google.com/app/apikey) | `gemini-2.5-flash` | Generous free tier (1,500 requests/day, no credit card). |
-| **Groq** | **100% Free** | Free key at [Groq Console](https://console.groq.com) | `llama-3.3-70b-versatile` | Ultra-fast LPU inference (~200ms sub-second generation). |
-| **Ollama** | **100% Free** | Install from [ollama.com](https://ollama.com) | `llama3.2` | Runs locally & offline. Zero API key, 100% private. |
-| **DeepSeek** | **Ultra Cheap** | API key at [DeepSeek Platform](https://platform.deepseek.com) | `deepseek-chat` | State-of-the-art coding intelligence at 90% lower cost. |
-| **OpenAI** | **Pay-As-You-Go** | API key at [OpenAI Platform](https://platform.openai.com) | `gpt-4o-mini` | Industry standard GPT models. |
+| Provider          |       Cost        | API Key Setup                                                          | Default Model             | Key Highlight                                            |
+| :---------------- | :---------------: | :--------------------------------------------------------------------- | :------------------------ | :------------------------------------------------------- |
+| **Google Gemini** |   **100% Free**   | Free key at [Google AI Studio](https://aistudio.google.com/app/apikey) | `gemini-3.8-flash`        | Generous free tier (1,500 requests/day, no credit card). |
+| **Groq**          |   **100% Free**   | Free key at [Groq Console](https://console.groq.com)                   | `llama-3.3-70b-versatile` | Ultra-fast LPU inference (~200ms sub-second generation). |
+| **Ollama**        |   **100% Free**   | Install from [ollama.com](https://ollama.com)                          | `llama3.2`                | Runs locally & offline. Zero API key, 100% private.      |
+| **DeepSeek**      |  **Ultra Cheap**  | API key at [DeepSeek Platform](https://platform.deepseek.com)          | `deepseek-chat`           | State-of-the-art coding intelligence at 90% lower cost.  |
+| **OpenAI**        | **Pay-As-You-Go** | API key at [OpenAI Platform](https://platform.openai.com)              | `gpt-4o-mini`             | Industry standard GPT models.                            |
 
 > **Tip for Ollama**: Simply run `ollama run llama3.2` in your terminal and select `"ollama"` as your provider. No API key or internet access required.
 
@@ -106,18 +106,18 @@ Smart Commit Generator AI connects directly to your preferred AI model. Three of
 
 Open Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`:
 
-| Setting                         | Type      | Default    | Description                                                                       |
-| :------------------------------ | :-------- | :--------- | :-------------------------------------------------------------------------------- |
-| `smartCommit.provider`          | `string`  | `"openai"` | AI provider: `"openai"`, `"gemini"`, `"deepseek"`, `"groq"`, or `"ollama"`.      |
-| `smartCommit.openaiApiKey`      | `string`  | `""`       | OpenAI API key (`sk-proj-...`).                                                   |
-| `smartCommit.geminiApiKey`      | `string`  | `""`       | Google Gemini API key (100% free at Google AI Studio).                            |
-| `smartCommit.deepseekApiKey`    | `string`  | `""`       | DeepSeek API key (from platform.deepseek.com).                                    |
-| `smartCommit.groqApiKey`        | `string`  | `""`       | Groq API key (free at console.groq.com).                                          |
-| `smartCommit.ollamaEndpoint`    | `string`  | `"http://localhost:11434"` | Local Ollama endpoint URL (runs offline, zero API key).               |
-| `smartCommit.model`             | `string`  | `""`       | Optional model override (e.g. `gpt-4o`, `deepseek-chat`, `llama3.2`).              |
-| `smartCommit.autoStage`         | `boolean` | `false`    | Automatically stage all modified files if nothing is staged before generating.    |
-| `smartCommit.confirmBeforePush` | `boolean` | `true`     | When true: Safe Mode (shows modal). When false: Fast Mode (instant 1-click push). |
-| `smartCommit.baseBranch`        | `string`  | `""`       | Target base branch for PR generator (auto-detects `main` or `master` if empty).   |
+| Setting                         | Type      | Default                    | Description                                                                       |
+| :------------------------------ | :-------- | :------------------------- | :-------------------------------------------------------------------------------- |
+| `smartCommit.provider`          | `string`  | `"openai"`                 | AI provider: `"openai"`, `"gemini"`, `"deepseek"`, `"groq"`, or `"ollama"`.       |
+| `smartCommit.openaiApiKey`      | `string`  | `""`                       | OpenAI API key (`sk-proj-...`).                                                   |
+| `smartCommit.geminiApiKey`      | `string`  | `""`                       | Google Gemini API key (100% free at Google AI Studio).                            |
+| `smartCommit.deepseekApiKey`    | `string`  | `""`                       | DeepSeek API key (from platform.deepseek.com).                                    |
+| `smartCommit.groqApiKey`        | `string`  | `""`                       | Groq API key (free at console.groq.com).                                          |
+| `smartCommit.ollamaEndpoint`    | `string`  | `"http://localhost:11434"` | Local Ollama endpoint URL (runs offline, zero API key).                           |
+| `smartCommit.model`             | `string`  | `""`                       | Optional model override (e.g. `gpt-4o`, `deepseek-chat`, `llama3.2`).             |
+| `smartCommit.autoStage`         | `boolean` | `false`                    | Automatically stage all modified files if nothing is staged before generating.    |
+| `smartCommit.confirmBeforePush` | `boolean` | `true`                     | When true: Safe Mode (shows modal). When false: Fast Mode (instant 1-click push). |
+| `smartCommit.baseBranch`        | `string`  | `""`                       | Target base branch for PR generator (auto-detects `main` or `master` if empty).   |
 
 ---
 

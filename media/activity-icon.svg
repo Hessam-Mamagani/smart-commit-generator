@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1.5 -1.5 27 27" width="24" height="24">
+  <!-- GitHub Octocat Silhouette -->
+  <path fill="currentColor" d="M9 2.5C5.13 2.5 2 5.63 2 9.5c0 3.1 2.01 5.72 4.79 6.65.35.06.48-.15.48-.34v-1.22c-1.94.42-2.35-.94-2.35-.94-.32-.81-.78-1.03-.78-1.03-.63-.43.05-.42.05-.42.7.05 1.07.72 1.07.72.62 1.07 1.64.76 2.04.58.06-.45.24-.76.44-.94-1.55-.18-3.18-.78-3.18-3.45 0-.76.27-1.39.72-1.88-.07-.18-.31-.89.07-1.86 0 0 .59-.19 1.92.72.56-.16 1.16-.23 1.76-.23s1.2.08 1.76.23c1.33-.91 1.92-.72 1.92-.72.38.97.14 1.68.07 1.86.45.49.72 1.12.72 1.88 0 2.68-1.63 3.27-3.19 3.44.25.22.48.64.48 1.3v1.93c0 .2.13.41.48.34A6.98 6.98 0 0 0 16 9.5c0-3.87-3.13-7-7-7z"/>
+  <!-- AI Sparkle Top-Right -->
+  <path fill="currentColor" d="M19 1l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9.9-2.1z"/>
+  <path fill="currentColor" d="M22 8l.4.9.9.4-.9.4-.4.9-.4-.9-.9-.4.9-.4.4-.9z"/>
+  <!-- Clean Git Branch Bottom-Right -->
+  <circle cx="16.5" cy="15.5" r="1.6" fill="currentColor"/>
+  <circle cx="16.5" cy="21.5" r="1.6" fill="currentColor"/>
+  <circle cx="21" cy="18" r="1.6" fill="currentColor"/>
+  <path d="M16.5 17v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M16.5 19.5c1.8 0 3-.6 4.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+</svg>
