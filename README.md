@@ -4,23 +4,33 @@
 [![Open VSX](https://img.shields.io/open-vsx/v/Hessam-Mamagani/smart-commit-generator-ai?style=flat-square&color=purple&label=Open%20VSX)](https://open-vsx.org/extension/Hessam-Mamagani/smart-commit-generator-ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE.txt)
 
-**Fast, accurate, and context-aware Git assistant for VS Code, Cursor, and Antigravity IDE. Generate conventional commits, one-click commit & push, sync branches safely, draft comprehensive Pull Request descriptions, and resolve branch merge conflicts with OpenAI, Google Gemini, DeepSeek, Groq & local Ollama.**
+**Fast, accurate, and context-aware Git assistant for VS Code, Cursor, and Antigravity IDE. Generate conventional commits, one-click commit & push, sync branches safely, draft comprehensive Pull Request descriptions, and resolve branch merge conflicts with OpenAI, Google Gemini, DeepSeek, Groq, Grok (xAI) & local Ollama.**
+
+---
+
+## Quick Demo
+
+![Smart Commit Generator AI Demo](https://raw.githubusercontent.com/Hessam-Mamagani/smart-commit-generator/main/media/demo.gif)
 
 ---
 
 ## Key Features
 
+- **Dedicated Smart Git AI Dashboard**: Unified Activity Bar and Source Control panel with interactive commit editor, real-time character counter, and instant one-click actions.
 - **Strict Diff Inspection**: Reads your exact line additions and deletions—never assumes changes from file names or unrelated code.
 - **Conventional Commits**: Produces standardized headers (`feat`, `fix`, `refactor`, `perf`, `docs`, `chore`, etc.) under 72 characters, with optional bullet points for multi-part edits.
+- **Interactive Changed Files Explorer**: Live list of uncommitted changed files with an active blue counter badge. Click any file or `📄` to open the file directly in the editor; click `⧉` or the status badge (`M`, `U`, `A`, `D`) to view a side-by-side diff against `HEAD`.
+- **Interactive Branch Switcher**: Click `Branch: <name> ▾` in the dashboard to switch local or remote branches instantly, or create and checkout new branches on the fly.
+- **Multi-Repository Switcher**: Click `Repo: <name> ▾` to switch active workspaces with zero hassle.
+- **Pre-Flight Debug Artifact Protection**: Automatically scans diffs for leftover `console.log`, `debugger`, `print()`, or `var_dump()` calls before committing.
 - **Fast Mode vs Safe Mode Toggle**: Switch between instant 1-click push (zero dialogs) and safe review mode with a single click.
-- **Safe Branch Sync & Push (`$(git-merge)`)**: Automatically verifies zero merge conflicts in memory with `git merge-tree` before syncing and pushing changes to any target branch (e.g. `publish`, `dev`, `staging`).
+- **Safe Branch Sync & Push (`$(git-merge)`)**: Automatically verifies zero merge conflicts in memory with `git merge-tree` before syncing and pushing changes to any target branch (e.g. `publish`, `dev`, `staging`) with auto semver bumping.
 - **One-Click Commit & Push**: Stage, generate, commit, and push to your remote repository in a single click with built-in preview and safety confirmation.
 - **Pull Request (PR) Generator**: Compares your working branch against `main` or `master` to generate a comprehensive markdown PR description with summary, key changes, and verification checklist.
 - **Branch Compare & AI Conflict Advisor**: Dry-run merge check between any two branches. Identifies conflicts before they happen and provides production-ready merged code solutions.
 - **Status Bar Launcher**: Permanent `$(sparkle) Smart Git` status bar button displaying current mode with one-click access to all tools.
-- **Multi-AI Engine**: Seamlessly switch between **OpenAI**, **Google Gemini** (100% free tier), **DeepSeek**, **Groq** (free & ultra-fast), and **Ollama** (local, offline, zero API key).
-- **Interactive Setup**: No manual configuration files required. If an API key is missing, a one-click prompt lets you paste your key directly in the editor.
-- **100% Private & Local**: Your API keys stay on your machine. API calls are made directly to OpenAI/Google with zero telemetry or intermediate servers.
+- **Multi-AI Engine**: Seamlessly switch between **Google Gemini** (100% free tier, `gemini-3.8-flash`), **Groq** (free & ultra-fast LPU), **Ollama** (local, offline, zero API key), **Grok (xAI)**, **DeepSeek**, and **OpenAI**.
+- **100% Private & Local**: Your API keys stay on your machine. API calls are made directly to OpenAI/Google/Groq/xAI with zero telemetry or intermediate servers.
 
 ---
 
@@ -50,6 +60,7 @@ Smart Commit Generator AI connects directly to your preferred AI model. Three of
 | **Google Gemini** |   **100% Free**   | Free key at [Google AI Studio](https://aistudio.google.com/app/apikey) | `gemini-3.8-flash`        | Generous free tier (1,500 requests/day, no credit card). |
 | **Groq**          |   **100% Free**   | Free key at [Groq Console](https://console.groq.com)                   | `llama-3.3-70b-versatile` | Ultra-fast LPU inference (~200ms sub-second generation). |
 | **Ollama**        |   **100% Free**   | Install from [ollama.com](https://ollama.com)                          | `llama3.2`                | Runs locally & offline. Zero API key, 100% private.      |
+| **Grok (xAI)**    | **Pay-As-You-Go** | API key at [xAI Console](https://console.x.ai)                         | `grok-2-latest`           | Cutting-edge reasoning & coding intelligence from xAI.   |
 | **DeepSeek**      |  **Ultra Cheap**  | API key at [DeepSeek Platform](https://platform.deepseek.com)          | `deepseek-chat`           | State-of-the-art coding intelligence at 90% lower cost.  |
 | **OpenAI**        | **Pay-As-You-Go** | API key at [OpenAI Platform](https://platform.openai.com)              | `gpt-4o-mini`             | Industry standard GPT models.                            |
 
@@ -108,11 +119,12 @@ Open Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`:
 
 | Setting                         | Type      | Default                    | Description                                                                       |
 | :------------------------------ | :-------- | :------------------------- | :-------------------------------------------------------------------------------- |
-| `smartCommit.provider`          | `string`  | `"openai"`                 | AI provider: `"openai"`, `"gemini"`, `"deepseek"`, `"groq"`, or `"ollama"`.       |
+| `smartCommit.provider`          | `string`  | `"openai"`                 | AI provider: `"openai"`, `"gemini"`, `"deepseek"`, `"groq"`, `"grok"`, or `"ollama"`. |
 | `smartCommit.openaiApiKey`      | `string`  | `""`                       | OpenAI API key (`sk-proj-...`).                                                   |
 | `smartCommit.geminiApiKey`      | `string`  | `""`                       | Google Gemini API key (100% free at Google AI Studio).                            |
 | `smartCommit.deepseekApiKey`    | `string`  | `""`                       | DeepSeek API key (from platform.deepseek.com).                                    |
 | `smartCommit.groqApiKey`        | `string`  | `""`                       | Groq API key (free at console.groq.com).                                          |
+| `smartCommit.grokApiKey`        | `string`  | `""`                       | Grok (xAI) API key (from console.x.ai).                                           |
 | `smartCommit.ollamaEndpoint`    | `string`  | `"http://localhost:11434"` | Local Ollama endpoint URL (runs offline, zero API key).                           |
 | `smartCommit.model`             | `string`  | `""`                       | Optional model override (e.g. `gpt-4o`, `deepseek-chat`, `llama3.2`).             |
 | `smartCommit.autoStage`         | `boolean` | `false`                    | Automatically stage all modified files if nothing is staged before generating.    |

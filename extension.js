@@ -2335,10 +2335,17 @@ class SmartGitViewProvider {
       localResourceRoots: [this._extensionUri],
     };
 
-    webviewView.webview.html = this._getHtmlForWebview();
+    const iconUri = webviewView.webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, "icon.png"),
+    );
+
+    webviewView.webview.html = this._getHtmlForWebview(iconUri);
 
     webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.command) {
+        case "quickMenu":
+          vscode.commands.executeCommand("smartCommit.quickMenu");
+          break;
         case "generate":
           vscode.commands.executeCommand("smartCommit.generate");
           break;
@@ -2561,7 +2568,7 @@ class SmartGitViewProvider {
     });
   }
 
-  _getHtmlForWebview() {
+  _getHtmlForWebview(iconUri = "") {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2587,6 +2594,25 @@ class SmartGitViewProvider {
       justify-content: space-between;
       gap: 6px;
       margin-bottom: 10px;
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .brand-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      object-fit: cover;
+      vertical-align: middle;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+      transition: transform 0.15s ease;
+      flex-shrink: 0;
+    }
+    .brand-icon:hover {
+      transform: scale(1.08);
     }
     .pill {
       display: inline-flex;
@@ -2928,8 +2954,11 @@ class SmartGitViewProvider {
 </head>
 <body>
   <div class="header-bar">
-    <div class="pill" id="providerPill" title="Click to switch AI engine">
-      <span>AI:</span> <strong id="providerText">Gemini (Free)</strong> &#9662;
+    <div class="brand-group">
+      ${iconUri ? `<img src="${iconUri}" class="brand-icon" id="brandIcon" alt="Logo" title="Smart Commit Generator AI — Click for Quick Menu" />` : ""}
+      <div class="pill" id="providerPill" title="Click to switch AI engine">
+        <span>AI:</span> <strong id="providerText">Gemini (Free)</strong> &#9662;
+      </div>
     </div>
     <div class="pill pill-safe" id="modePill" title="Click to toggle Safe / Fast Mode">
       <span id="modeText">Safe Mode</span>
@@ -3084,6 +3113,12 @@ class SmartGitViewProvider {
     document.getElementById('btnCompare').addEventListener('click', () => {
       vscode.postMessage({ command: 'compare' });
     });
+    const brandIcon = document.getElementById('brandIcon');
+    if (brandIcon) {
+      brandIcon.addEventListener('click', () => {
+        vscode.postMessage({ command: 'quickMenu' });
+      });
+    }
     document.getElementById('providerPill').addEventListener('click', () => {
       vscode.postMessage({ command: 'selectProvider' });
     });
