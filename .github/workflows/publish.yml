@@ -16,12 +16,14 @@ jobs:
     name: Publish to Marketplaces
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # Required for automatic Git release tagging
       id-token: write # Required for Microsoft Marketplace Trusted Publishing (OIDC)
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -37,3 +39,16 @@ jobs:
         run: npx ovsx publish --no-dependencies -p ${{ secrets.OVSX_PAT }}
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+      - name: Create Git Release Tag
+        continue-on-error: true
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if ! git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "v$VERSION"
+            git push origin "v$VERSION"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

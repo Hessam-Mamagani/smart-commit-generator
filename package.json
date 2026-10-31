@@ -239,6 +239,11 @@
           "type": "string",
           "default": "",
           "description": "Base branch for PR description generation (e.g., main or master). Auto-detected if left empty."
+        },
+        "smartCommit.autoBumpVersion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically calculate and bump semver in package.json when syncing to release/publish branches."
         }
       }
     }

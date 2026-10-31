@@ -441,7 +441,92 @@ function scanDiffForSecurityIssues(diffText) {
   return issues;
 }
 
-async function executeBranchSyncAndPush(cwd, currentBranch, targetBranch) {
+function getPackageJsonInfo(cwd) {
+  const pkgPath = path.join(cwd, 'package.json');
+  if (!fs.existsSync(pkgPath)) return null;
+  try {
+    const raw = fs.readFileSync(pkgPath, 'utf8');
+    const pkg = JSON.parse(raw);
+    return { pkgPath, version: pkg.version || '1.0.0', pkg };
+  } catch (e) {
+    return null;
+  }
+}
+
+function calculateNextVersions(currentVersion, commitLog = '') {
+  const parts = currentVersion.split('.').map(n => parseInt(n, 10) || 0);
+  while (parts.length < 3) parts.push(0);
+
+  const [major, minor, patch] = parts;
+
+  let recommendedType = 'patch';
+  if (commitLog.includes('BREAKING CHANGE') || /^[a-z]+!:/m.test(commitLog)) {
+    recommendedType = 'major';
+  } else if (/^feat(?:\([^\)]+\))?:/m.test(commitLog)) {
+    recommendedType = 'minor';
+  }
+
+  const patchVersion = `${major}.${minor}.${patch + 1}`;
+  const minorVersion = `${major}.${minor + 1}.0`;
+  const majorVersion = `${major + 1}.0.0`;
+
+  let recommendedVersion = patchVersion;
+  if (recommendedType === 'major') recommendedVersion = majorVersion;
+  else if (recommendedType === 'minor') recommendedVersion = minorVersion;
+
+  return {
+    currentVersion,
+    recommendedType,
+    recommendedVersion,
+    patchVersion,
+    minorVersion,
+    majorVersion
+  };
+}
+
+async function applyVersionBump(pkgInfo, newVersion, cwd) {
+  try {
+    pkgInfo.pkg.version = newVersion;
+    fs.writeFileSync(pkgInfo.pkgPath, JSON.stringify(pkgInfo.pkg, null, 2) + '\n', 'utf8');
+    await runGit(['add', 'package.json'], cwd);
+    await runGit(['commit', '-m', `chore(release): bump version to ${newVersion}`], cwd);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function promptVersionSelection(versionPlan) {
+  const choice = await vscode.window.showQuickPick([
+    {
+      label: `$(tag) Patch: v${versionPlan.patchVersion}`,
+      description: versionPlan.recommendedType === 'patch' ? '(Recommended) Bug fixes & minor updates' : 'Bug fixes & minor updates',
+      version: versionPlan.patchVersion
+    },
+    {
+      label: `$(tag) Minor: v${versionPlan.minorVersion}`,
+      description: versionPlan.recommendedType === 'minor' ? '(Recommended) New features & functionality' : 'New features & functionality',
+      version: versionPlan.minorVersion
+    },
+    {
+      label: `$(tag) Major: v${versionPlan.majorVersion}`,
+      description: versionPlan.recommendedType === 'major' ? '(Recommended) Breaking changes' : 'Breaking changes',
+      version: versionPlan.majorVersion
+    },
+    {
+      label: `$(history) Keep Current: v${versionPlan.currentVersion}`,
+      description: 'Push without modifying version',
+      version: null
+    }
+  ], {
+    title: 'Smart Git: Select Release Version',
+    placeHolder: `Current version is v${versionPlan.currentVersion}. Choose version for this release:`
+  });
+
+  return choice ? choice.version : undefined;
+}
+
+async function executeBranchSyncAndPush(cwd, currentBranch, targetBranch, targetVersion = null) {
   try {
     const status = (await runGit(['status', '--short'], cwd)).trim();
     if (status) {
@@ -456,7 +541,9 @@ async function executeBranchSyncAndPush(cwd, currentBranch, targetBranch) {
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Smart Git: Merging "${currentBranch}" into "${targetBranch}" & pushing...`,
+      title: targetVersion
+        ? `Smart Git: Releasing v${targetVersion} to "${targetBranch}" & pushing...`
+        : `Smart Git: Merging "${currentBranch}" into "${targetBranch}" & pushing...`,
       cancellable: false
     },
     async () => {
@@ -465,7 +552,13 @@ async function executeBranchSyncAndPush(cwd, currentBranch, targetBranch) {
         await runGit(['merge', currentBranch], cwd);
         await runGit(['push', 'origin', targetBranch], cwd);
         await runGit(['checkout', currentBranch], cwd);
-        vscode.window.showInformationMessage(`Smart Git: Successfully synced "${currentBranch}" into "${targetBranch}" and pushed to remote!`);
+        // Also push currentBranch so any version bump commit is on remote
+        await runGit(['push', 'origin', currentBranch], cwd).catch(() => {});
+        vscode.window.showInformationMessage(
+          targetVersion
+            ? `Smart Git: Successfully released v${targetVersion} to "${targetBranch}" and pushed to remote!`
+            : `Smart Git: Successfully synced "${currentBranch}" into "${targetBranch}" and pushed to remote!`
+        );
         success = true;
       } catch (err) {
         await runGit(['checkout', currentBranch], cwd).catch(() => {});
@@ -774,6 +867,45 @@ function activate(context) {
         'Sync & Push Anyway'
       );
       if (proceed !== 'Sync & Push Anyway') return;
+    }
+
+    const isReleaseBranch = /publish|release/i.test(targetBranch);
+    const autoBump = getSetting('autoBumpVersion') !== false;
+    const pkgInfo = isReleaseBranch && autoBump ? getPackageJsonInfo(cwd) : null;
+
+    let targetVersion = null;
+    if (pkgInfo) {
+      let commitLog = '';
+      try {
+        commitLog = await runGit(['log', `${targetBranch}..HEAD`, '--oneline'], cwd);
+      } catch (e) {}
+      const versionPlan = calculateNextVersions(pkgInfo.version, commitLog);
+
+      const detailMsg = `Branches: "${currentBranch}" ➔ "${targetBranch}"\nAuto Version Bump: v${versionPlan.currentVersion} ➔ v${versionPlan.recommendedVersion} (${versionPlan.recommendedType.toUpperCase()})\nStatus: 0 conflicts, 0 security warnings.\n\nWould you like to release v${versionPlan.recommendedVersion} to "${targetBranch}" and push to remote?`;
+
+      const choice = await vscode.window.showInformationMessage(
+        'Smart Git: Ready to Sync & Publish',
+        {
+          modal: true,
+          detail: detailMsg
+        },
+        `Sync & Publish (v${versionPlan.recommendedVersion})`,
+        'Customize Version...'
+      );
+
+      if (!choice) return;
+
+      if (choice === `Sync & Publish (v${versionPlan.recommendedVersion})`) {
+        targetVersion = versionPlan.recommendedVersion;
+        await applyVersionBump(pkgInfo, targetVersion, cwd);
+      } else if (choice === 'Customize Version...') {
+        const custom = await promptVersionSelection(versionPlan);
+        if (custom === undefined) return;
+        if (custom) {
+          targetVersion = custom;
+          await applyVersionBump(pkgInfo, targetVersion, cwd);
+        }
+      }
     } else {
       const choice = await vscode.window.showInformationMessage(
         `Smart Git: Zero conflicts! Sync "${currentBranch}" into "${targetBranch}"?`,
@@ -786,7 +918,7 @@ function activate(context) {
       if (choice !== 'Sync & Push Now') return;
     }
 
-    await executeBranchSyncAndPush(cwd, currentBranch, targetBranch);
+    await executeBranchSyncAndPush(cwd, currentBranch, targetBranch, targetVersion);
   });
 
   // 7. Command: Generate Pull Request Description
@@ -1082,24 +1214,64 @@ Write a comprehensive branch comparison and architecture report:`;
         vscode.commands.executeCommand('smartCommit.generatePR', arg);
       }
     } else if (postCompareAction.type === 'clean') {
-      const detailMsg = postCompareAction.commitCount > 0
-        ? `Branches: "${currentBranch}" ➔ "${selectedTarget}"\nCommits ahead: ${postCompareAction.commitCount}\nStatus: 0 conflicts, 0 security warnings.\n\nWould you like to sync "${currentBranch}" into "${selectedTarget}" and push to remote now?`
-        : `Branches: "${currentBranch}" ➔ "${selectedTarget}"\nStatus: "${selectedTarget}" is already up to date with "${currentBranch}" (0 new commits).\n0 conflicts, 0 security warnings.`;
+      const isReleaseBranch = /publish|release/i.test(selectedTarget);
+      const autoBump = getSetting('autoBumpVersion') !== false;
+      const pkgInfo = isReleaseBranch && autoBump ? getPackageJsonInfo(cwd) : null;
 
-      const act = await vscode.window.showInformationMessage(
-        'Smart Git: Ready to Sync & Push',
-        {
-          modal: true,
-          detail: detailMsg
-        },
-        `Sync & Push to "${selectedTarget}"`,
-        'Generate PR Description'
-      );
+      if (pkgInfo) {
+        let commitLog = '';
+        try {
+          commitLog = await runGit(['log', `${selectedTarget}..HEAD`, '--oneline'], cwd);
+        } catch (e) {}
+        const versionPlan = calculateNextVersions(pkgInfo.version, commitLog);
 
-      if (act === `Sync & Push to "${selectedTarget}"`) {
-        await executeBranchSyncAndPush(cwd, currentBranch, selectedTarget);
-      } else if (act === 'Generate PR Description') {
-        vscode.commands.executeCommand('smartCommit.generatePR', arg);
+        const detailMsg = `Branches: "${currentBranch}" ➔ "${selectedTarget}"\nAuto Version Bump: v${versionPlan.currentVersion} ➔ v${versionPlan.recommendedVersion} (${versionPlan.recommendedType.toUpperCase()})\nCommits ahead: ${postCompareAction.commitCount}\nStatus: 0 conflicts, 0 security warnings.\n\nWould you like to release v${versionPlan.recommendedVersion} to "${selectedTarget}" and push to remote now?`;
+
+        const act = await vscode.window.showInformationMessage(
+          'Smart Git: Ready to Sync & Publish',
+          {
+            modal: true,
+            detail: detailMsg
+          },
+          `Sync & Publish (v${versionPlan.recommendedVersion})`,
+          'Customize Version...',
+          'Generate PR Description'
+        );
+
+        if (act === `Sync & Publish (v${versionPlan.recommendedVersion})`) {
+          await applyVersionBump(pkgInfo, versionPlan.recommendedVersion, cwd);
+          await executeBranchSyncAndPush(cwd, currentBranch, selectedTarget, versionPlan.recommendedVersion);
+        } else if (act === 'Customize Version...') {
+          const custom = await promptVersionSelection(versionPlan);
+          if (custom !== undefined) {
+            if (custom) {
+              await applyVersionBump(pkgInfo, custom, cwd);
+            }
+            await executeBranchSyncAndPush(cwd, currentBranch, selectedTarget, custom);
+          }
+        } else if (act === 'Generate PR Description') {
+          vscode.commands.executeCommand('smartCommit.generatePR', arg);
+        }
+      } else {
+        const detailMsg = postCompareAction.commitCount > 0
+          ? `Branches: "${currentBranch}" ➔ "${selectedTarget}"\nCommits ahead: ${postCompareAction.commitCount}\nStatus: 0 conflicts, 0 security warnings.\n\nWould you like to sync "${currentBranch}" into "${selectedTarget}" and push to remote now?`
+          : `Branches: "${currentBranch}" ➔ "${selectedTarget}"\nStatus: "${selectedTarget}" is already up to date with "${currentBranch}" (0 new commits).\n0 conflicts, 0 security warnings.`;
+
+        const act = await vscode.window.showInformationMessage(
+          'Smart Git: Ready to Sync & Push',
+          {
+            modal: true,
+            detail: detailMsg
+          },
+          `Sync & Push to "${selectedTarget}"`,
+          'Generate PR Description'
+        );
+
+        if (act === `Sync & Push to "${selectedTarget}"`) {
+          await executeBranchSyncAndPush(cwd, currentBranch, selectedTarget);
+        } else if (act === 'Generate PR Description') {
+          vscode.commands.executeCommand('smartCommit.generatePR', arg);
+        }
       }
     }
   });

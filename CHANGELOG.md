@@ -5,6 +5,7 @@ All notable changes to the "Smart Commit Generator AI" extension will be documen
 ## [1.3.0] - 2026-10-31
 
 ### Added
+- **Automated Semver Version Bumping**: When syncing or releasing to `publish` (or release branches), the extension automatically inspects conventional commits, recommends the appropriate semver bump (Patch for fixes/chores, Minor for features, Major for breaking changes), updates `package.json`, and commits the release bump with 1-click.
 - **Interactive Branch Comparison with Security Scan & Direct Push**: Branch comparison (`$(diff)`) now runs a live pre-merge conflict check and security audit (detects API keys, tokens, and private keys). If clean, provides direct 1-click actions: **Sync & Push**, **Generate PR Description**, or **Cancel**. If conflicts exist, blocks pushing and guides resolution.
 - **Safe Branch Sync & Push (`$(git-merge)`)**: Sync and push changes from your working branch into any target branch (e.g., `publish`, `dev`, `staging`). Checks for merge conflicts in memory first with `git merge-tree`; only merges and pushes if clean, otherwise alerts you and opens the AI Conflict Advisor.
 - **Fast Mode vs Safe Mode Dynamic Toggle**: 1-click button in the Source Control title bar and status bar that visually switches between `$(shield)` (Safe Mode) and `$(zap)` (Fast Mode) in real time. Fast Mode stages, generates, commits, and pushes instantly with zero dialogs. Safe Mode shows the review modal before pushing.
