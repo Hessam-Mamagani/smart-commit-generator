@@ -36,6 +36,52 @@ A concise overview (2-3 sentences) of what this PR accomplishes and why.
 
 Output ONLY the markdown content. Do not wrap in outer code fences (\`\`\`).`;
 
+const CONFLICT_SYSTEM_PROMPT = `You are an expert Git merge conflict resolution specialist and senior software engineer.
+Analyze the provided merge conflict details, file statistics, and code chunks between the two branches.
+
+Structure your response clearly with:
+# ⚠️ Merge Conflict Analysis & Resolution Guide
+
+## 1. Conflict Summary
+- List of conflicting files
+- Root cause (why both branches collided on these specific lines)
+
+## 2. File-by-File Resolution
+For each conflicting file:
+### File: \`<filename>\`
+- **Working Branch Intent**: What our current branch is accomplishing here.
+- **Target Branch Intent**: What the incoming/target branch is accomplishing here.
+- **Recommended Merged Code**:
+\`\`\`<language>
+// Provide the exact, production-ready merged code block that integrates both changes safely.
+\`\`\`
+
+## 3. Recommended Action Plan
+- Step-by-step git commands to safely execute the merge and verify.
+
+Output strictly formatted GitHub Markdown.`;
+
+const BRANCH_COMPARE_SYSTEM_PROMPT = `You are a principal software architect.
+Analyze the commits, modified files, and code diff between the working branch and the target branch.
+
+Structure your response clearly with:
+# 🔍 Branch Comparison & Architecture Report
+
+## 1. Executive Summary
+High-level summary of the development scope, goals, and differences between these branches.
+
+## 2. Key Changes & Architecture
+- Detailed bullet points grouped by feature, module, or layer (e.g., UI/Frontend, API/Backend, Config).
+
+## 3. Impact & Risk Assessment
+- Breaking changes, database/schema changes, or environment variable requirements.
+- Performance and security considerations.
+
+## 4. Merge Readiness
+- Status assessment (Ready to merge, needs tests, or review recommended).
+
+Output strictly formatted GitHub Markdown.`;
+
 function getSetting(key) {
   const config = vscode.workspace.getConfiguration('smartCommit');
   const globalConfig = vscode.workspace.getConfiguration();
@@ -105,7 +151,7 @@ function cleanCommitMessage(msg) {
   return cleaned;
 }
 
-function requestOpenAI(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT) {
+function requestOpenAI(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT, maxTokens = 600) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({
       model: model || 'gpt-4o-mini',
@@ -114,7 +160,7 @@ function requestOpenAI(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT)
         { role: 'user', content: userContent }
       ],
       temperature: 0.2,
-      max_tokens: 600
+      max_tokens: maxTokens
     });
 
     const req = https.request('https://api.openai.com/v1/chat/completions', {
@@ -146,7 +192,7 @@ function requestOpenAI(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT)
   });
 }
 
-function requestGemini(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT) {
+function requestGemini(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT, maxTokens = 600) {
   return new Promise((resolve, reject) => {
     const modelName = model || 'gemini-3.8-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
@@ -159,7 +205,7 @@ function requestGemini(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT)
       ],
       generationConfig: {
         temperature: 0.2,
-        maxOutputTokens: 600
+        maxOutputTokens: maxTokens
       }
     });
 
@@ -287,8 +333,114 @@ async function generateCommitMessage(repo, autoStage = false) {
   }
 }
 
+async function getBranches(cwd, currentBranch) {
+  try {
+    const output = await runGit(['branch', '-a'], cwd);
+    const lines = output.split('\n');
+    const branches = new Set();
+
+    for (const line of lines) {
+      let b = line.trim();
+      if (!b || b.startsWith('*')) continue;
+      if (b.includes('->')) continue;
+      if (b.startsWith('remotes/')) {
+        b = b.replace(/^remotes\//, '');
+      }
+      if (b && b !== currentBranch && b !== `origin/${currentBranch}`) {
+        branches.add(b);
+      }
+    }
+
+    return Array.from(branches).sort((a, b) => {
+      const aRemote = a.startsWith('origin/');
+      const bRemote = b.startsWith('origin/');
+      if (!aRemote && bRemote) return -1;
+      if (aRemote && !bRemote) return 1;
+      return a.localeCompare(b);
+    });
+  } catch (e) {
+    return [];
+  }
+}
+
+async function checkMergeConflicts(cwd, currentBranch, targetBranch) {
+  let mergeBase = '';
+  try {
+    mergeBase = (await runGit(['merge-base', 'HEAD', targetBranch], cwd)).trim();
+  } catch (e) {
+    return { hasConflicts: false, mergeBase: '', output: 'No common ancestor.' };
+  }
+
+  let mergeTreeOutput = '';
+  try {
+    mergeTreeOutput = await runGit(['merge-tree', mergeBase, 'HEAD', targetBranch], cwd);
+  } catch (e) {
+    mergeTreeOutput = e.message || '';
+  }
+
+  const hasConflictMarkers = mergeTreeOutput.includes('<<<<<<<') ||
+                             mergeTreeOutput.includes('changed in both') ||
+                             mergeTreeOutput.includes('conflict');
+
+  return {
+    hasConflicts: hasConflictMarkers,
+    mergeBase,
+    output: mergeTreeOutput
+  };
+}
+
 function activate(context) {
-  // Command 1: Generate Message
+  // 1. Status Bar Quick Launcher
+  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusBar.text = '$(sparkle) Smart Git';
+  statusBar.tooltip = 'Smart Git Assistant (Click for actions)';
+  statusBar.command = 'smartCommit.quickMenu';
+  statusBar.show();
+  context.subscriptions.push(statusBar);
+
+  // 2. Interactive Quick Menu
+  const disposableQuickMenu = vscode.commands.registerCommand('smartCommit.quickMenu', async () => {
+    const choice = await vscode.window.showQuickPick([
+      {
+        label: '$(sparkle) Generate Commit Message',
+        description: 'Inspect staged diff and insert into commit box',
+        command: 'smartCommit.generate'
+      },
+      {
+        label: '$(cloud-upload) Generate, Commit & Push',
+        description: 'One-click auto-stage, AI message, commit and remote push',
+        command: 'smartCommit.generateCommitAndPush'
+      },
+      {
+        label: '$(git-pull-request) Generate PR Description',
+        description: 'Create GitHub Markdown PR summary against base branch',
+        command: 'smartCommit.generatePR'
+      },
+      {
+        label: '$(git-compare) Compare Branches & Conflict Advisor',
+        description: 'Dry-run merge analysis and AI conflict resolution guide',
+        command: 'smartCommit.compareBranches'
+      },
+      {
+        label: '$(gear) Extension Settings',
+        description: 'Configure OpenAI / Gemini API keys and defaults',
+        command: 'workbench.action.openSettings',
+        args: ['smartCommit']
+      }
+    ], {
+      placeHolder: 'Smart Git Assistant - Select an Action'
+    });
+
+    if (choice) {
+      if (choice.args) {
+        vscode.commands.executeCommand(choice.command, ...choice.args);
+      } else {
+        vscode.commands.executeCommand(choice.command);
+      }
+    }
+  });
+
+  // 3. Command: Generate Message
   const disposableGenerate = vscode.commands.registerCommand('smartCommit.generate', async () => {
     const repo = getGitRepository();
     if (!repo) {
@@ -317,7 +469,7 @@ function activate(context) {
     );
   });
 
-  // Command 2: Generate, Commit & Push
+  // 4. Command: Generate, Commit & Push
   const disposableCommitAndPush = vscode.commands.registerCommand('smartCommit.generateCommitAndPush', async () => {
     const repo = getGitRepository();
     if (!repo) {
@@ -335,19 +487,16 @@ function activate(context) {
       },
       async () => {
         try {
-          // 1. Stage all changes if nothing staged
           const stagedCheck = await runGit(['diff', '--cached'], cwd);
           if (!stagedCheck.trim()) {
             await runGit(['add', '-A'], cwd);
           }
 
-          // 2. Generate commit message
           const msg = await generateCommitMessage(repo, false);
           if (!msg) return;
 
           repo.inputBox.value = msg;
 
-          // 3. Confirm before push (if enabled)
           const confirmPush = getSetting('confirmBeforePush');
           const shouldConfirm = confirmPush !== false;
 
@@ -383,7 +532,7 @@ function activate(context) {
     );
   });
 
-  // Command 3: Generate Pull Request Description
+  // 5. Command: Generate Pull Request Description
   const disposableGeneratePR = vscode.commands.registerCommand('smartCommit.generatePR', async () => {
     const repo = getGitRepository();
     if (!repo) {
@@ -460,9 +609,9 @@ Please generate the full Pull Request description:`;
 
           let prMarkdown = '';
           if (provider === 'gemini') {
-            prMarkdown = await requestGemini(apiKey, modelOverride, prPrompt, PR_SYSTEM_PROMPT);
+            prMarkdown = await requestGemini(apiKey, modelOverride, prPrompt, PR_SYSTEM_PROMPT, 1000);
           } else {
-            prMarkdown = await requestOpenAI(apiKey, modelOverride, prPrompt, PR_SYSTEM_PROMPT);
+            prMarkdown = await requestOpenAI(apiKey, modelOverride, prPrompt, PR_SYSTEM_PROMPT, 1000);
           }
 
           if (!prMarkdown) {
@@ -470,10 +619,8 @@ Please generate the full Pull Request description:`;
             return;
           }
 
-          // 1. Copy to clipboard
           await vscode.env.clipboard.writeText(prMarkdown);
 
-          // 2. Open in new Markdown editor
           const doc = await vscode.workspace.openTextDocument({
             content: prMarkdown,
             language: 'markdown'
@@ -488,7 +635,167 @@ Please generate the full Pull Request description:`;
     );
   });
 
-  context.subscriptions.push(disposableGenerate, disposableCommitAndPush, disposableGeneratePR);
+  // 6. Command: Compare Branches & AI Conflict Advisor
+  const disposableCompare = vscode.commands.registerCommand('smartCommit.compareBranches', async () => {
+    const repo = getGitRepository();
+    if (!repo) {
+      vscode.window.showErrorMessage('No active Git repository found.');
+      return;
+    }
+
+    const cwd = repo.rootUri.fsPath;
+    const provider = getSetting('provider') || 'openai';
+    const modelOverride = getSetting('model');
+    const apiKey = await resolveApiKey(provider);
+    if (!apiKey) return;
+
+    let currentBranch = '';
+    try {
+      currentBranch = (await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)).trim();
+    } catch (e) {
+      currentBranch = 'HEAD';
+    }
+
+    const branches = await getBranches(cwd, currentBranch);
+    if (branches.length === 0) {
+      vscode.window.showInformationMessage('No other branches found to compare with.');
+      return;
+    }
+
+    const selectedTarget = await vscode.window.showQuickPick(branches, {
+      placeHolder: `Select branch to compare against "${currentBranch}":`,
+      title: 'Smart Git: Branch Comparator & Conflict Advisor'
+    });
+
+    if (!selectedTarget) return;
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Smart Git: Comparing "${currentBranch}" vs "${selectedTarget}"...`,
+        cancellable: false
+      },
+      async () => {
+        try {
+          const conflictCheck = await checkMergeConflicts(cwd, currentBranch, selectedTarget);
+
+          let commitLog = '';
+          try {
+            commitLog = await runGit(['log', `${selectedTarget}..HEAD`, '--oneline', '-n', '30'], cwd);
+          } catch (e) {
+            commitLog = await runGit(['log', '-n', '10', '--oneline'], cwd).catch(() => '');
+          }
+
+          let diffStat = '';
+          try {
+            diffStat = await runGit(['diff', `${selectedTarget}...HEAD`, '--stat'], cwd);
+          } catch (e) {
+            diffStat = '';
+          }
+
+          let diffBody = '';
+          try {
+            diffBody = await runGit(['diff', `${selectedTarget}...HEAD`], cwd);
+          } catch (e) {
+            diffBody = '';
+          }
+
+          if (diffBody.length > 25000) {
+            diffBody = diffBody.slice(0, 25000) + '\n\n[Diff truncated for length...]';
+          }
+
+          let reportMarkdown = '';
+
+          if (conflictCheck.hasConflicts) {
+            let conflictDetails = conflictCheck.output;
+            if (conflictDetails.length > 25000) {
+              conflictDetails = conflictDetails.slice(0, 25000) + '\n\n[Conflict log truncated...]';
+            }
+
+            const prompt = `Current Working Branch: ${currentBranch}
+Target Merge Branch: ${selectedTarget}
+Merge Base: ${conflictCheck.mergeBase}
+
+SIMULATED MERGE CONFLICT LOG:
+${conflictDetails}
+
+FILE CHANGES STAT:
+${diffStat}
+
+Analyze the conflicts and provide the complete resolution guide:`;
+
+            if (provider === 'gemini') {
+              reportMarkdown = await requestGemini(apiKey, modelOverride, prompt, CONFLICT_SYSTEM_PROMPT, 1500);
+            } else {
+              reportMarkdown = await requestOpenAI(apiKey, modelOverride, prompt, CONFLICT_SYSTEM_PROMPT, 1500);
+            }
+
+            const doc = await vscode.workspace.openTextDocument({
+              content: reportMarkdown,
+              language: 'markdown'
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+            vscode.window.showWarningMessage(
+              `Smart Git: Merge conflicts detected between "${currentBranch}" and "${selectedTarget}". AI Resolution Guide opened!`,
+              'View Source Control'
+            ).then(act => {
+              if (act === 'View Source Control') {
+                vscode.commands.executeCommand('workbench.view.scm');
+              }
+            });
+
+          } else {
+            const prompt = `Current Working Branch: ${currentBranch}
+Target Base Branch: ${selectedTarget}
+
+COMMITS UNIQUE TO ${currentBranch}:
+${commitLog || '(no new commits)'}
+
+MODIFIED FILES STAT:
+${diffStat || '(no files modified)'}
+
+DIFF DETAILS:
+${diffBody || '(no diff)'}
+
+Write a comprehensive branch comparison and architecture report:`;
+
+            if (provider === 'gemini') {
+              reportMarkdown = await requestGemini(apiKey, modelOverride, prompt, BRANCH_COMPARE_SYSTEM_PROMPT, 1500);
+            } else {
+              reportMarkdown = await requestOpenAI(apiKey, modelOverride, prompt, BRANCH_COMPARE_SYSTEM_PROMPT, 1500);
+            }
+
+            const doc = await vscode.workspace.openTextDocument({
+              content: reportMarkdown,
+              language: 'markdown'
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+            vscode.window.showInformationMessage(
+              `Smart Git: Branches compared cleanly with 0 conflicts!`,
+              'Generate PR Description'
+            ).then(act => {
+              if (act === 'Generate PR Description') {
+                vscode.commands.executeCommand('smartCommit.generatePR');
+              }
+            });
+          }
+        } catch (err) {
+          vscode.window.showErrorMessage(`Smart Git Error: ${err.message}`);
+        }
+      }
+    );
+  });
+
+  context.subscriptions.push(
+    statusBar,
+    disposableQuickMenu,
+    disposableGenerate,
+    disposableCommitAndPush,
+    disposableGeneratePR,
+    disposableCompare
+  );
 }
 
 function deactivate() {}

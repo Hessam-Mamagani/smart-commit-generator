@@ -2,6 +2,19 @@
 
 All notable changes to the "Smart Commit Generator AI" extension will be documented in this file.
 
+## [1.2.0] - 2026-10-31
+
+### Added
+- **Smart Branch Compare & AI Conflict Advisor**: Added `Smart Commit: Compare Branches & Conflict Advisor` command (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd>) and Source Control header button (`$(git-compare)`).
+  - Dry-run merge conflict detection using `git merge-tree`.
+  - Non-destructive conflict analysis explaining both branch changes and providing production-ready merged code blocks.
+  - Architecture and Risk Assessment report for clean merges.
+- **Status Bar Quick Launcher**: Added persistent `$(sparkle) Smart Git` status bar button for one-click access to all actions and settings.
+- **Interactive Quick Menu**: Fast command selection with descriptive summaries.
+- **Enhanced Documentation**: Comprehensive workflow guide, shortcut reference, and marketplace badges.
+
+---
+
 ## [1.1.0] - 2026-10-31
 
 ### Added

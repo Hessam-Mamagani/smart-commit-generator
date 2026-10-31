@@ -1,6 +1,10 @@
 # Smart Commit Generator AI
 
-**Fast, accurate, and context-aware Git commit messages and Pull Request descriptions powered by OpenAI & Google Gemini.**
+[![Version](https://img.shields.io/visual-studio-marketplace/v/Hessam-Mamagani.smart-commit-generator-ai?style=flat-square&color=blue&label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=Hessam-Mamagani.smart-commit-generator-ai)
+[![Open VSX](https://img.shields.io/open-vsx/v/Hessam-Mamagani/smart-commit-generator-ai?style=flat-square&color=purple&label=Open%20VSX)](https://open-vsx.org/extension/Hessam-Mamagani/smart-commit-generator-ai)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE.txt)
+
+**Fast, accurate, and context-aware Git assistant for VS Code, Cursor, and Antigravity IDE. Generate conventional commits, one-click commit & push, draft comprehensive Pull Request descriptions, and resolve branch merge conflicts with OpenAI & Google Gemini.**
 
 ---
 
@@ -10,52 +14,104 @@ Traditional AI commit tools often inspect entire files or guess from file names,
 
 ---
 
-## Features
+## Key Features
 
 - **Strict Diff Inspection**: Reads your exact line additions and deletions—never assumes changes from file names or unrelated code.
 - **Conventional Commits**: Produces standardized headers (`feat`, `fix`, `refactor`, `perf`, `docs`, `chore`, etc.) under 72 characters, with optional bullet points for multi-part edits.
 - **One-Click Commit & Push**: Stage, generate, commit, and push to your remote repository in a single click with built-in preview and safety confirmation.
 - **Pull Request (PR) Generator**: Compares your working branch against `main` or `master` to generate a comprehensive markdown PR description with summary, key changes, and verification checklist.
-- **Dual AI Engine**: Seamlessly switch between **OpenAI** (`gpt-4o-mini`) and **Google Gemini** (`gemini-3.8-flash`).
+- **Branch Compare & AI Conflict Advisor**: Dry-run merge check (`git merge-tree`) between any two branches. Identifies conflicts before they happen and provides production-ready merged code solutions.
+- **Status Bar Quick Launcher**: Access all tools instantly from the `$(sparkle) Smart Git` status bar button at the bottom of your editor.
+- **Dual AI Engine**: Seamlessly switch between **OpenAI** (`gpt-4o-mini`, `gpt-4o`) and **Google Gemini** (`gemini-3.8-flash`, `gemini-2.5-pro`).
 - **Interactive Setup**: No manual configuration files required. If an API key is missing, a one-click prompt lets you paste your key directly in the editor.
 - **100% Private & Local**: Your API keys stay on your machine. API calls are made directly to OpenAI/Google with zero telemetry or intermediate servers.
 
 ---
 
-## Usage
+## Source Control Toolbar Actions
 
-### 1. Generate Commit Message
-- **Source Control View**: Click the **sparkle icon** (`$(sparkle)`) on the Source Control title bar.
-- **Shortcut**: Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> (<kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> on macOS).
+Four dedicated action buttons are built right into your **Source Control** view header:
 
-### 2. Generate, Commit & Push (One-Click)
-- **Source Control View**: Click the **cloud upload icon** (`$(cloud-upload)`) on the Source Control title bar.
-- **Shortcut**: Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> (<kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> on macOS).
-- Automatically stages modified files, generates the commit message, and prompts to commit and push to remote.
+| Icon | Action | Shortcut | Description |
+| :---: | :--- | :---: | :--- |
+| `$(sparkle)` | **Generate Message** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> | Inspects staged diff and populates the commit box with Conventional Commits. |
+| `$(cloud-upload)` | **Generate, Commit & Push** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | Stages modified files, generates message, commits, and pushes to remote. |
+| `$(git-pull-request)` | **Generate PR Description** | — | Drafts full markdown Pull Request description and copies to clipboard. |
+| `$(git-compare)` | **Branch Compare & Conflict Advisor** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | Compares working branch against another branch; detects and solves conflicts. |
 
-### 3. Generate Pull Request Description
-- **Source Control View**: Click the **git pull request icon** (`$(git-pull-request)`).
-- **Command Palette**: Run `Smart Commit: Generate PR Description`.
-- Automatically opens a new Markdown document with your formatted PR summary and copies it to your clipboard.
+---
+
+## Detailed Workflows
+
+### 1. Generating a Commit Message
+1. Open the **Source Control** panel (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd>).
+2. Stage your changes (`+`), or leave them unstaged—the extension checks unstaged diffs as fallback.
+3. Click the **sparkle icon** (`$(sparkle)`) on your repository header or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd>.
+4. Your commit message will appear in the commit input box instantly.
+
+### 2. One-Click Commit & Push
+1. Click the **cloud upload icon** (`$(cloud-upload)`) or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd>.
+2. The extension stages modified files, generates the commit message, and displays a safety confirmation:
+   - **`[Commit & Push]`**: Commits and pushes immediately to your remote repository.
+   - **`[Only Commit]`**: Creates the commit locally without pushing.
+   - **`[Cancel]`**: Leaves the generated message in the input box for manual editing.
+
+### 3. Pull Request Description Generator
+1. Click the **git pull request icon** (`$(git-pull-request)`) on the Source Control header.
+2. The AI compares your working branch against the base branch (`main` / `master`).
+3. Generates a structured markdown PR:
+   - **Summary** of objectives and architecture.
+   - **Key Changes** grouped by module.
+   - **Testing & Verification** steps.
+   - **Checklist** for reviewers.
+4. Automatically copies to your clipboard and opens in a side-by-side Markdown editor tab.
+
+### 4. Branch Compare & AI Conflict Advisor
+1. Click the **git compare icon** (`$(git-compare)`) or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd>.
+2. Select any local or remote branch from the dropdown menu to compare against.
+3. Git executes a non-destructive dry-run merge check (`git merge-tree`):
+   - **If Clean**: AI generates an Architecture & Branch Comparison report with risk assessment.
+   - **If Conflicts Exist**: AI pinpoints the exact conflicting files, explains both branch intents, and generates the recommended merged code block ready to apply.
+
+### 5. Status Bar Quick Menu
+Click **`$(sparkle) Smart Git`** on the bottom-left status bar to open the interactive command palette with all available actions and settings.
 
 ---
 
 ## Configuration
 
-Open your IDE Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`:
+Open Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`:
 
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `smartCommit.provider` | `string` | `"openai"` | AI provider (`"openai"` or `"gemini"`). |
-| `smartCommit.openaiApiKey` | `string` | `""` | Your OpenAI API key (`sk-proj-...`). |
-| `smartCommit.geminiApiKey` | `string` | `""` | Your Google Gemini API key. |
-| `smartCommit.model` | `string` | `""` | Optional model override (defaults: `gpt-4o-mini` / `gemini-3.8-flash`). |
+| `smartCommit.provider` | `string` | `"openai"` | AI provider: `"openai"` or `"gemini"`. |
+| `smartCommit.openaiApiKey` | `string` | `""` | OpenAI API key (`sk-proj-...`). |
+| `smartCommit.geminiApiKey` | `string` | `""` | Google Gemini API key. |
+| `smartCommit.model` | `string` | `""` | Optional model override (e.g. `gpt-4o`, `gemini-2.5-pro`). |
 | `smartCommit.autoStage` | `boolean` | `false` | Automatically stage all modified files if nothing is staged before generating. |
-| `smartCommit.confirmBeforePush` | `boolean` | `true` | Show a confirmation prompt with message preview before pushing to remote. |
-| `smartCommit.baseBranch` | `string` | `""` | Target base branch for PR description generation (auto-detected if empty). |
+| `smartCommit.confirmBeforePush` | `boolean` | `true` | Show a safety confirmation prompt before pushing to remote. |
+| `smartCommit.baseBranch` | `string` | `""` | Target base branch for PR generator (auto-detects `main` or `master` if empty). |
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut (Windows/Linux) | Shortcut (macOS) | Command |
+| :--- | :--- | :--- |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> | Smart Commit: Generate Message |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | Smart Commit: Generate, Commit & Push |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | Smart Commit: Compare Branches & Conflict Advisor |
+
+---
+
+## Privacy & Security
+
+- **Direct Communication**: Requests are made directly from your machine to `api.openai.com` or `generativelanguage.googleapis.com` via HTTPS.
+- **No Third-Party Servers**: No telemetry, tracking, analytics, or proxy servers.
+- **Local Storage**: API keys are stored solely inside your IDE's encrypted user configuration.
 
 ---
 
 ## License
 
-MIT © Hessam Barasm Mamagani
+MIT © [Hessam Barasm Mamagani](https://github.com/Hessam-Mamagani)

@@ -2,7 +2,7 @@
   "name": "smart-commit-generator-ai",
   "displayName": "Smart Commit Generator AI",
   "description": "Fast & accurate AI Git commit message generator powered by OpenAI & Google Gemini",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "Hessam-Mamagani",
   "author": {
     "name": "Hessam Barasm Mamagani",
@@ -57,6 +57,16 @@
         "command": "smartCommit.generatePR",
         "title": "Smart Commit: Generate PR Description",
         "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "smartCommit.compareBranches",
+        "title": "Smart Commit: Compare Branches & Conflict Advisor",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "smartCommit.quickMenu",
+        "title": "Smart Commit: Quick Menu",
+        "icon": "$(sparkle)"
       }
     ],
     "keybindings": [
@@ -69,6 +79,11 @@
         "command": "smartCommit.generateCommitAndPush",
         "key": "ctrl+alt+p",
         "mac": "cmd+alt+p"
+      },
+      {
+        "command": "smartCommit.compareBranches",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c"
       }
     ],
     "menus": {
@@ -84,6 +99,10 @@
         {
           "command": "smartCommit.generatePR",
           "group": "navigation@3"
+        },
+        {
+          "command": "smartCommit.compareBranches",
+          "group": "navigation@4"
         }
       ],
       "view/title": [
@@ -101,6 +120,11 @@
           "command": "smartCommit.generatePR",
           "when": "view == workbench.scm",
           "group": "navigation@3"
+        },
+        {
+          "command": "smartCommit.compareBranches",
+          "when": "view == workbench.scm",
+          "group": "navigation@4"
         }
       ]
     },
