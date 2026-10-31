@@ -40,7 +40,7 @@ const CONFLICT_SYSTEM_PROMPT = `You are an expert Git merge conflict resolution 
 Analyze the provided merge conflict details, file statistics, and code chunks between the two branches.
 
 Structure your response clearly with:
-# ⚠️ Merge Conflict Analysis & Resolution Guide
+# Merge Conflict Analysis & Resolution Guide
 
 ## 1. Conflict Summary
 - List of conflicting files
@@ -65,7 +65,7 @@ const BRANCH_COMPARE_SYSTEM_PROMPT = `You are a principal software architect.
 Analyze the commits, modified files, and code diff between the working branch and the target branch.
 
 Structure your response clearly with:
-# 🔍 Branch Comparison & Architecture Report
+# Branch Comparison & Architecture Report
 
 ## 1. Executive Summary
 High-level summary of the development scope, goals, and differences between these branches.
@@ -766,13 +766,12 @@ function activate(context) {
     if (securityIssues.length > 0) {
       const issueList = securityIssues.slice(0, 3).map(i => `• ${i.type} in ${i.file}`).join('\n');
       const proceed = await vscode.window.showWarningMessage(
-        `Smart Git: ⚠️ Potential Security Warning before syncing to "${targetBranch}"!`,
+        `Smart Git: Security Warning before syncing to "${targetBranch}"`,
         {
           modal: true,
           detail: `Detected sensitive data in changes:\n${issueList}\n\nDo you want to proceed with sync and push?`
         },
-        'Sync & Push Anyway',
-        'Cancel'
+        'Sync & Push Anyway'
       );
       if (proceed !== 'Sync & Push Anyway') return;
     } else {
@@ -782,8 +781,7 @@ function activate(context) {
           modal: true,
           detail: `This operation will:\n1. Switch to "${targetBranch}"\n2. Merge latest changes from "${currentBranch}"\n3. Push to remote origin\n4. Switch back to "${currentBranch}"`
         },
-        'Sync & Push Now',
-        'Cancel'
+        'Sync & Push Now'
       );
       if (choice !== 'Sync & Push Now') return;
     }
@@ -1008,7 +1006,7 @@ Analyze the conflicts and provide the complete resolution guide:`;
           } else {
             let securityNotice = '';
             if (securityIssues.length > 0) {
-              securityNotice = `## ⚠️ Security Notice\nDetected ${securityIssues.length} potential secret(s) or sensitive string(s) in the diff:\n` +
+              securityNotice = `## Security Notice\nDetected ${securityIssues.length} potential secret(s) or sensitive string(s) in the diff:\n` +
                 securityIssues.map(i => `- **${i.type}** in \`${i.file}\``).join('\n') + '\n\n';
             }
 
@@ -1059,7 +1057,7 @@ Write a comprehensive branch comparison and architecture report:`;
 
     if (postCompareAction.type === 'conflict') {
       vscode.window.showWarningMessage(
-        `Smart Git: Merge conflicts detected between "${currentBranch}" and "${selectedTarget}"! Pushing is blocked. Review AI Resolution Guide in editor.`,
+        `Smart Git: Merge conflicts detected between "${currentBranch}" and "${selectedTarget}". Pushing is blocked. Review AI Resolution Guide in editor.`,
         'Open Source Control'
       ).then(act => {
         if (act === 'Open Source Control') {
@@ -1069,14 +1067,13 @@ Write a comprehensive branch comparison and architecture report:`;
     } else if (postCompareAction.type === 'security') {
       const issueList = postCompareAction.securityIssues.slice(0, 3).map(i => `• ${i.type} in ${i.file}`).join('\n');
       const act = await vscode.window.showWarningMessage(
-        `Smart Git: ⚠️ Potential Security Warning detected between "${currentBranch}" and "${selectedTarget}"!`,
+        `Smart Git: Security Warning detected between "${currentBranch}" and "${selectedTarget}"`,
         {
           modal: true,
           detail: `Found ${postCompareAction.securityIssues.length} potential secret(s) in branch changes:\n${issueList}\n\nReview the report before pushing to prevent credential leaks.`
         },
         `Sync & Push to "${selectedTarget}" Anyway`,
-        'Generate PR Description',
-        'Cancel'
+        'Generate PR Description'
       );
 
       if (act === `Sync & Push to "${selectedTarget}" Anyway`) {
@@ -1090,14 +1087,13 @@ Write a comprehensive branch comparison and architecture report:`;
         : `Branches: "${currentBranch}" ➔ "${selectedTarget}"\nStatus: "${selectedTarget}" is already up to date with "${currentBranch}" (0 new commits).\n0 conflicts, 0 security warnings.`;
 
       const act = await vscode.window.showInformationMessage(
-        `Smart Git: Ready to Sync & Push! 🚀`,
+        'Smart Git: Ready to Sync & Push',
         {
           modal: true,
           detail: detailMsg
         },
         `Sync & Push to "${selectedTarget}"`,
-        'Generate PR Description',
-        'Cancel'
+        'Generate PR Description'
       );
 
       if (act === `Sync & Push to "${selectedTarget}"`) {

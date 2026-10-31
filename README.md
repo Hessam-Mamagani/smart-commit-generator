@@ -35,7 +35,7 @@ Six dedicated action buttons are built right into your **Source Control** view h
 | `$(repo-sync)` | **Safe Sync to Branch** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd> | Conflict-safe branch merge & push (e.g. `main` ➔ `publish` or `dev`). |
 | `$(git-pull-request)` | **Generate PR Description** | — | Drafts full markdown Pull Request description and copies to clipboard. |
 | `$(git-compare)` | **Branch Compare & Advisor** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | Compares branches; detects and writes AI resolution guides for conflicts. |
-| `$(shield)` / `$(zap)` | **Toggle Fast / Safe Mode** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd> | Flips visually between 🛡️ Safe Mode (modal confirmation) and ⚡ Fast Mode (instant push). |
+| `$(shield)` / `$(zap)` | **Toggle Fast / Safe Mode** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd> | Flips visually between Safe Mode (modal confirmation) and Fast Mode (instant push). |
 
 ---
 
