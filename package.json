@@ -1,7 +1,7 @@
 {
   "name": "smart-commit-generator-ai",
   "displayName": "Smart Commit Generator AI",
-  "description": "Fast & accurate AI Git commit message generator powered by OpenAI & Google Gemini",
+  "description": "AI Git commit message generator, 1-click push, PR generator & safe branch sync. Supports OpenAI, Free Gemini, DeepSeek, Groq & local Ollama.",
   "version": "1.3.5",
   "publisher": "Hessam-Mamagani",
   "author": {
@@ -21,13 +21,26 @@
     "git",
     "commit",
     "ai",
-    "openai",
+    "ai commit",
+    "commit message generator",
+    "conventional commits",
+    "deepseek",
     "gemini",
-    "conventional-commits",
+    "groq",
+    "grok",
+    "ollama",
+    "openai",
+    "chatgpt",
+    "free ai",
     "pull-request",
-    "push",
+    "git push",
+    "branch sync",
+    "merge conflicts",
+    "copilot alternative",
+    "cursor",
     "scm",
-    "productivity"
+    "productivity",
+    "developer tools"
   ],
   "icon": "icon.png",
   "engines": {
@@ -35,6 +48,7 @@
   },
   "categories": [
     "SCM Providers",
+    "Machine Learning",
     "Other"
   ],
   "activationEvents": [
@@ -205,10 +219,13 @@
           "type": "string",
           "enum": [
             "openai",
-            "gemini"
+            "gemini",
+            "deepseek",
+            "groq",
+            "ollama"
           ],
           "default": "openai",
-          "description": "Provider to use: 'openai' (gpt-4o-mini) or 'gemini' (gemini-3.8-flash)."
+          "description": "Provider to use: 'openai', 'gemini' (Free tier), 'deepseek', 'groq' (Free tier), or 'ollama' (local offline)."
         },
         "smartCommit.openaiApiKey": {
           "type": "string",
@@ -218,12 +235,27 @@
         "smartCommit.geminiApiKey": {
           "type": "string",
           "default": "",
-          "description": "Google Gemini API Key."
+          "description": "Google Gemini API Key (100% free at Google AI Studio)."
+        },
+        "smartCommit.deepseekApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "DeepSeek API Key (from platform.deepseek.com)."
+        },
+        "smartCommit.groqApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Groq API Key (free from console.groq.com)."
+        },
+        "smartCommit.ollamaEndpoint": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Local Ollama server endpoint (default: http://localhost:11434)."
         },
         "smartCommit.model": {
           "type": "string",
           "default": "",
-          "description": "Model override (leave blank to use provider defaults: gpt-4o-mini or gemini-3.8-flash)."
+          "description": "Model override (leave blank to use provider defaults: gpt-4o-mini, gemini-2.5-flash, deepseek-chat, llama-3.3-70b-versatile, or llama3.2)."
         },
         "smartCommit.autoStage": {
           "type": "boolean",

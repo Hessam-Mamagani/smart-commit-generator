@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const { execFile } = require('child_process');
 const https = require('https');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
@@ -163,10 +164,14 @@ function cleanCommitMessage(msg) {
   return cleaned;
 }
 
-function requestOpenAI(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT, maxTokens = 600) {
+function requestOpenAICompatible({ baseUrl, apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT, maxTokens = 600, providerName = 'AI' }) {
   return new Promise((resolve, reject) => {
+    const urlObj = new URL(baseUrl);
+    const isHttps = urlObj.protocol === 'https:';
+    const httpLib = isHttps ? https : http;
+
     const payload = JSON.stringify({
-      model: model || 'gpt-4o-mini',
+      model: model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent }
@@ -175,18 +180,28 @@ function requestOpenAI(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT,
       max_tokens: maxTokens
     });
 
-    const req = https.request('https://api.openai.com/v1/chat/completions', {
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    const options = {
+      protocol: urlObj.protocol,
+      hostname: urlObj.hostname,
+      port: urlObj.port || (isHttps ? 443 : 80),
+      path: urlObj.pathname + (urlObj.search || ''),
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      }
-    }, (res) => {
+      headers
+    };
+
+    const req = httpLib.request(options, (res) => {
       let body = '';
       res.on('data', chunk => body += chunk);
       res.on('end', () => {
-        if (res.statusCode !== 200) {
-          return reject(new Error(`OpenAI API error (${res.statusCode}): ${body}`));
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          return reject(new Error(`${providerName} API error (${res.statusCode}): ${body.slice(0, 300)}`));
         }
         try {
           const json = JSON.parse(body);
@@ -198,15 +213,75 @@ function requestOpenAI(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT,
       });
     });
 
-    req.on('error', reject);
+    req.on('error', (err) => {
+      if (providerName === 'Ollama' && (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND')) {
+        reject(new Error('Cannot connect to local Ollama. Please ensure Ollama is running (`ollama run llama3.2`).'));
+      } else {
+        reject(err);
+      }
+    });
     req.write(payload);
     req.end();
   });
 }
 
+function requestOpenAI(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT, maxTokens = 600) {
+  return requestOpenAICompatible({
+    baseUrl: 'https://api.openai.com/v1/chat/completions',
+    apiKey,
+    model: model || 'gpt-4o-mini',
+    userContent,
+    systemPrompt,
+    maxTokens,
+    providerName: 'OpenAI'
+  });
+}
+
+async function executeAiCompletion(provider, apiKey, modelOverride, userContent, systemPrompt = SYSTEM_PROMPT, maxTokens = 600) {
+  if (provider === 'gemini') {
+    return await requestGemini(apiKey, modelOverride, userContent, systemPrompt, maxTokens);
+  }
+  if (provider === 'deepseek') {
+    return await requestOpenAICompatible({
+      baseUrl: 'https://api.deepseek.com/chat/completions',
+      apiKey,
+      model: modelOverride || 'deepseek-chat',
+      userContent,
+      systemPrompt,
+      maxTokens,
+      providerName: 'DeepSeek'
+    });
+  }
+  if (provider === 'groq') {
+    return await requestOpenAICompatible({
+      baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
+      apiKey,
+      model: modelOverride || 'llama-3.3-70b-versatile',
+      userContent,
+      systemPrompt,
+      maxTokens,
+      providerName: 'Groq'
+    });
+  }
+  if (provider === 'ollama') {
+    const endpoint = getSetting('ollamaEndpoint') || 'http://localhost:11434';
+    const baseUrl = endpoint.replace(/\/+$/, '') + '/v1/chat/completions';
+    return await requestOpenAICompatible({
+      baseUrl,
+      apiKey: '',
+      model: modelOverride || 'llama3.2',
+      userContent,
+      systemPrompt,
+      maxTokens,
+      providerName: 'Ollama'
+    });
+  }
+  return await requestOpenAI(apiKey, modelOverride, userContent, systemPrompt, maxTokens);
+}
+
 function requestGemini(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT, maxTokens = 600) {
   return new Promise((resolve, reject) => {
-    const modelName = model || 'gemini-3.8-flash';
+    const modelName = model || 'gemini-2.5-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
     const payload = JSON.stringify({
       systemInstruction: {
@@ -248,37 +323,55 @@ function requestGemini(apiKey, model, userContent, systemPrompt = SYSTEM_PROMPT,
 }
 
 async function resolveApiKey(provider) {
+  if (provider === 'ollama') {
+    return 'local-ollama';
+  }
+
   const openaiKey = getSetting('openaiApiKey');
   const geminiKey = getSetting('geminiApiKey');
+  const deepseekKey = getSetting('deepseekApiKey');
+  const groqKey = getSetting('groqApiKey');
 
-  let apiKey = provider === 'gemini' ? geminiKey : openaiKey;
-  if (!apiKey) {
-    if (provider === 'openai' && geminiKey) {
-      apiKey = geminiKey;
-    } else if (provider === 'gemini' && openaiKey) {
-      apiKey = openaiKey;
-    }
+  let apiKey = '';
+  let providerLabel = 'OpenAI';
+  let targetSetting = 'openaiApiKey';
+
+  if (provider === 'gemini') {
+    apiKey = geminiKey;
+    providerLabel = 'Google Gemini';
+    targetSetting = 'geminiApiKey';
+  } else if (provider === 'deepseek') {
+    apiKey = deepseekKey;
+    providerLabel = 'DeepSeek';
+    targetSetting = 'deepseekApiKey';
+  } else if (provider === 'groq') {
+    apiKey = groqKey;
+    providerLabel = 'Groq';
+    targetSetting = 'groqApiKey';
+  } else {
+    apiKey = openaiKey;
+    providerLabel = 'OpenAI';
+    targetSetting = 'openaiApiKey';
   }
 
   if (!apiKey) {
     const choice = await vscode.window.showWarningMessage(
-      `Smart Commit: No API key found for "${provider}".`,
+      `Smart Commit: No API key configured for "${providerLabel}".`,
       'Enter API Key',
       'Open Settings'
     );
 
     if (choice === 'Enter API Key') {
       const entered = await vscode.window.showInputBox({
-        prompt: `Paste your ${provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} API Key`,
+        prompt: `Paste your ${providerLabel} API Key`,
         password: true,
         ignoreFocusOut: true
       });
 
       if (entered && entered.trim()) {
         apiKey = entered.trim();
-        const targetSetting = provider === 'gemini' ? 'geminiApiKey' : 'openaiApiKey';
         await vscode.workspace.getConfiguration('smartCommit').update(targetSetting, apiKey, vscode.ConfigurationTarget.Global);
-        vscode.window.showInformationMessage(`Smart Commit: ${provider} API Key saved successfully!`);
+        vscode.window.showInformationMessage(`Smart Commit: ${providerLabel} API Key saved successfully!`);
       } else {
         return null;
       }
@@ -338,11 +431,7 @@ async function generateCommitMessage(repo, autoStage = false) {
   }
 
   const userPrompt = `Analyze this git diff and produce the commit message:\n\n${diffContent}`;
-  if (provider === 'gemini') {
-    return await requestGemini(apiKey, modelOverride, userPrompt);
-  } else {
-    return await requestOpenAI(apiKey, modelOverride, userPrompt);
-  }
+  return await executeAiCompletion(provider, apiKey, modelOverride, userPrompt);
 }
 
 async function getBranches(cwd, currentBranch) {
@@ -1010,12 +1099,7 @@ ${diffBody || '(no diff)'}
 
 Please generate the full Pull Request description:`;
 
-          let prMarkdown = '';
-          if (provider === 'gemini') {
-            prMarkdown = await requestGemini(apiKey, modelOverride, prPrompt, PR_SYSTEM_PROMPT, 1000);
-          } else {
-            prMarkdown = await requestOpenAI(apiKey, modelOverride, prPrompt, PR_SYSTEM_PROMPT, 1000);
-          }
+          let prMarkdown = await executeAiCompletion(provider, apiKey, modelOverride, prPrompt, PR_SYSTEM_PROMPT, 1000);
 
           if (!prMarkdown) {
             vscode.window.showWarningMessage('Smart Commit: Empty response from AI.');
@@ -1135,11 +1219,7 @@ ${diffStat}
 
 Analyze the conflicts and provide the complete resolution guide:`;
 
-            if (provider === 'gemini') {
-              reportMarkdown = await requestGemini(apiKey, modelOverride, prompt, CONFLICT_SYSTEM_PROMPT, 1500);
-            } else {
-              reportMarkdown = await requestOpenAI(apiKey, modelOverride, prompt, CONFLICT_SYSTEM_PROMPT, 1500);
-            }
+            reportMarkdown = await executeAiCompletion(provider, apiKey, modelOverride, prompt, CONFLICT_SYSTEM_PROMPT, 1500);
 
             const doc = await vscode.workspace.openTextDocument({
               content: reportMarkdown,
@@ -1171,11 +1251,7 @@ ${diffBody.slice(0, 25000) || '(no diff)'}
 
 Write a comprehensive branch comparison and architecture report:`;
 
-            if (provider === 'gemini') {
-              reportMarkdown = await requestGemini(apiKey, modelOverride, prompt, BRANCH_COMPARE_SYSTEM_PROMPT, 1500);
-            } else {
-              reportMarkdown = await requestOpenAI(apiKey, modelOverride, prompt, BRANCH_COMPARE_SYSTEM_PROMPT, 1500);
-            }
+            reportMarkdown = await executeAiCompletion(provider, apiKey, modelOverride, prompt, BRANCH_COMPARE_SYSTEM_PROMPT, 1500);
 
             if (securityNotice) {
               reportMarkdown = securityNotice + reportMarkdown;
