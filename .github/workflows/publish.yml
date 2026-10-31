@@ -3,6 +3,9 @@ name: Publish Extension
 on:
   workflow_dispatch:
   push:
+    branches:
+      - publish
+      - Publish
     tags:
       - 'v*'
   release:
@@ -32,3 +35,4 @@ jobs:
         run: npx ovsx publish --no-dependencies -p ${{ secrets.OVSX_PAT }}
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
