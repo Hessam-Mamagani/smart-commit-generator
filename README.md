@@ -32,24 +32,26 @@ Traditional AI commit tools often inspect entire files or guess from file names,
 
 Four dedicated action buttons are built right into your **Source Control** view header:
 
-| Icon | Action | Shortcut | Description |
-| :---: | :--- | :---: | :--- |
-| `$(sparkle)` | **Generate Message** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> | Inspects staged diff and populates the commit box with Conventional Commits. |
-| `$(cloud-upload)` | **Generate, Commit & Push** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | Stages modified files, generates message, commits, and pushes to remote. |
-| `$(git-pull-request)` | **Generate PR Description** | — | Drafts full markdown Pull Request description and copies to clipboard. |
-| `$(git-compare)` | **Branch Compare & Conflict Advisor** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | Compares working branch against another branch; detects and solves conflicts. |
+|         Icon          | Action                                |                    Shortcut                     | Description                                                                   |
+| :-------------------: | :------------------------------------ | :---------------------------------------------: | :---------------------------------------------------------------------------- |
+|     `$(sparkle)`      | **Generate Message**                  | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> | Inspects staged diff and populates the commit box with Conventional Commits.  |
+|   `$(cloud-upload)`   | **Generate, Commit & Push**           | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | Stages modified files, generates message, commits, and pushes to remote.      |
+| `$(git-pull-request)` | **Generate PR Description**           |                        —                        | Drafts full markdown Pull Request description and copies to clipboard.        |
+|   `$(git-compare)`    | **Branch Compare & Conflict Advisor** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | Compares working branch against another branch; detects and solves conflicts. |
 
 ---
 
 ## Detailed Workflows
 
 ### 1. Generating a Commit Message
+
 1. Open the **Source Control** panel (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd>).
 2. Stage your changes (`+`), or leave them unstaged—the extension checks unstaged diffs as fallback.
 3. Click the **sparkle icon** (`$(sparkle)`) on your repository header or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd>.
 4. Your commit message will appear in the commit input box instantly.
 
 ### 2. One-Click Commit & Push
+
 1. Click the **cloud upload icon** (`$(cloud-upload)`) or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd>.
 2. The extension stages modified files, generates the commit message, and displays a safety confirmation:
    - **`[Commit & Push]`**: Commits and pushes immediately to your remote repository.
@@ -57,6 +59,7 @@ Four dedicated action buttons are built right into your **Source Control** view 
    - **`[Cancel]`**: Leaves the generated message in the input box for manual editing.
 
 ### 3. Pull Request Description Generator
+
 1. Click the **git pull request icon** (`$(git-pull-request)`) on the Source Control header.
 2. The AI compares your working branch against the base branch (`main` / `master`).
 3. Generates a structured markdown PR:
@@ -67,6 +70,7 @@ Four dedicated action buttons are built right into your **Source Control** view 
 4. Automatically copies to your clipboard and opens in a side-by-side Markdown editor tab.
 
 ### 4. Branch Compare & AI Conflict Advisor
+
 1. Click the **git compare icon** (`$(git-compare)`) or press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd>.
 2. Select any local or remote branch from the dropdown menu to compare against.
 3. Git executes a non-destructive dry-run merge check (`git merge-tree`):
@@ -74,6 +78,7 @@ Four dedicated action buttons are built right into your **Source Control** view 
    - **If Conflicts Exist**: AI pinpoints the exact conflicting files, explains both branch intents, and generates the recommended merged code block ready to apply.
 
 ### 5. Status Bar Quick Menu
+
 Click **`$(sparkle) Smart Git`** on the bottom-left status bar to open the interactive command palette with all available actions and settings.
 
 ---
@@ -82,24 +87,24 @@ Click **`$(sparkle) Smart Git`** on the bottom-left status bar to open the inter
 
 Open Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`:
 
-| Setting | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `smartCommit.provider` | `string` | `"openai"` | AI provider: `"openai"` or `"gemini"`. |
-| `smartCommit.openaiApiKey` | `string` | `""` | OpenAI API key (`sk-proj-...`). |
-| `smartCommit.geminiApiKey` | `string` | `""` | Google Gemini API key. |
-| `smartCommit.model` | `string` | `""` | Optional model override (e.g. `gpt-4o`, `gemini-2.5-pro`). |
-| `smartCommit.autoStage` | `boolean` | `false` | Automatically stage all modified files if nothing is staged before generating. |
-| `smartCommit.confirmBeforePush` | `boolean` | `true` | Show a safety confirmation prompt before pushing to remote. |
-| `smartCommit.baseBranch` | `string` | `""` | Target base branch for PR generator (auto-detects `main` or `master` if empty). |
+| Setting                         | Type      | Default    | Description                                                                     |
+| :------------------------------ | :-------- | :--------- | :------------------------------------------------------------------------------ |
+| `smartCommit.provider`          | `string`  | `"openai"` | AI provider: `"openai"` or `"gemini"`.                                          |
+| `smartCommit.openaiApiKey`      | `string`  | `""`       | OpenAI API key (`sk-proj-...`).                                                 |
+| `smartCommit.geminiApiKey`      | `string`  | `""`       | Google Gemini API key.                                                          |
+| `smartCommit.model`             | `string`  | `""`       | Optional model override (e.g. `gpt-4o`, `gemini-2.5-pro`).                      |
+| `smartCommit.autoStage`         | `boolean` | `false`    | Automatically stage all modified files if nothing is staged before generating.  |
+| `smartCommit.confirmBeforePush` | `boolean` | `true`     | Show a safety confirmation prompt before pushing to remote.                     |
+| `smartCommit.baseBranch`        | `string`  | `""`       | Target base branch for PR generator (auto-detects `main` or `master` if empty). |
 
 ---
 
 ## Keyboard Shortcuts
 
-| Shortcut (Windows/Linux) | Shortcut (macOS) | Command |
-| :--- | :--- | :--- |
-| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> | Smart Commit: Generate Message |
-| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | Smart Commit: Generate, Commit & Push |
+| Shortcut (Windows/Linux)                        | Shortcut (macOS)                               | Command                                           |
+| :---------------------------------------------- | :--------------------------------------------- | :------------------------------------------------ |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd> | Smart Commit: Generate Message                    |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd> | Smart Commit: Generate, Commit & Push             |
 | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | Smart Commit: Compare Branches & Conflict Advisor |
 
 ---

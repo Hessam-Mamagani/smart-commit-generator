@@ -2,6 +2,15 @@
 
 All notable changes to the "Smart Commit Generator AI" extension will be documented in this file.
 
+## [1.2.1] - 2026-10-31
+
+### Fixed & Improved
+- **Persistent Confirmation Dialog**: Switched "Commit & Push" confirmation prompt to a modal dialog so buttons never auto-dismiss or disappear before clicking.
+- **Multi-Repository Precision**: Accurately targets the clicked repository when multiple repositories are open in the Source Control panel.
+- **Dedicated Progress Indicator**: Added separate progress notification during git commit and push operations.
+
+---
+
 ## [1.2.0] - 2026-10-31
 
 ### Added

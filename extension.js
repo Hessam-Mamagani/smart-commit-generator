@@ -125,17 +125,29 @@ function runGit(args, cwd) {
   });
 }
 
-function getGitRepository() {
+function getTargetRepository(arg) {
   const gitExtension = vscode.extensions.getExtension('vscode.git');
   if (!gitExtension) return null;
   const api = gitExtension.exports.getAPI(1);
   if (!api || !api.repositories || api.repositories.length === 0) return null;
 
+  // 1. If triggered from a specific repository toolbar in SCM
+  if (arg) {
+    const uri = arg.rootUri || (arg.repository && arg.repository.rootUri);
+    if (uri) {
+      const match = api.repositories.find(r => r.rootUri.fsPath.toLowerCase() === uri.fsPath.toLowerCase());
+      if (match) return match;
+    }
+  }
+
+  // 2. If an editor document is open, match its repository
   const activeDocUri = vscode.window.activeTextEditor?.document?.uri;
   if (activeDocUri) {
-    const found = api.repositories.find(r => activeDocUri.fsPath.startsWith(r.rootUri.fsPath));
-    if (found) return found;
+    const match = api.repositories.find(r => activeDocUri.fsPath.toLowerCase().startsWith(r.rootUri.fsPath.toLowerCase()));
+    if (match) return match;
   }
+
+  // 3. Fallback to active repository or first in list
   return api.repositories[0];
 }
 
@@ -441,8 +453,8 @@ function activate(context) {
   });
 
   // 3. Command: Generate Message
-  const disposableGenerate = vscode.commands.registerCommand('smartCommit.generate', async () => {
-    const repo = getGitRepository();
+  const disposableGenerate = vscode.commands.registerCommand('smartCommit.generate', async (arg) => {
+    const repo = getTargetRepository(arg);
     if (!repo) {
       vscode.window.showErrorMessage('No active Git repository found.');
       return;
@@ -469,20 +481,22 @@ function activate(context) {
     );
   });
 
-  // 4. Command: Generate, Commit & Push
-  const disposableCommitAndPush = vscode.commands.registerCommand('smartCommit.generateCommitAndPush', async () => {
-    const repo = getGitRepository();
+  // 4. Command: Generate, Commit & Push (Modal prompt that never disappears)
+  const disposableCommitAndPush = vscode.commands.registerCommand('smartCommit.generateCommitAndPush', async (arg) => {
+    const repo = getTargetRepository(arg);
     if (!repo) {
       vscode.window.showErrorMessage('No active Git repository found.');
       return;
     }
 
     const cwd = repo.rootUri.fsPath;
+    let msg = '';
 
+    // Step A: Stage & Generate Message
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: 'Smart Commit: Preparing Commit & Push...',
+        title: 'Smart Commit: Generating commit message...',
         cancellable: false
       },
       async () => {
@@ -491,50 +505,65 @@ function activate(context) {
           if (!stagedCheck.trim()) {
             await runGit(['add', '-A'], cwd);
           }
-
-          const msg = await generateCommitMessage(repo, false);
-          if (!msg) return;
-
-          repo.inputBox.value = msg;
-
-          const confirmPush = getSetting('confirmBeforePush');
-          const shouldConfirm = confirmPush !== false;
-
-          if (shouldConfirm) {
-            const firstLine = msg.split('\n')[0];
-            const choice = await vscode.window.showInformationMessage(
-              `Generated: "${firstLine}"\nCommit and push now?`,
-              'Commit & Push',
-              'Only Commit',
-              'Cancel'
-            );
-
-            if (choice === 'Commit & Push') {
-              await runGit(['commit', '-m', msg], cwd);
-              await runGit(['push'], cwd);
-              repo.inputBox.value = '';
-              vscode.window.showInformationMessage('Smart Commit: Successfully committed and pushed to remote!');
-            } else if (choice === 'Only Commit') {
-              await runGit(['commit', '-m', msg], cwd);
-              repo.inputBox.value = '';
-              vscode.window.showInformationMessage('Smart Commit: Changes committed successfully!');
-            }
-          } else {
-            await runGit(['commit', '-m', msg], cwd);
-            await runGit(['push'], cwd);
-            repo.inputBox.value = '';
-            vscode.window.showInformationMessage('Smart Commit: Successfully committed and pushed to remote!');
+          msg = await generateCommitMessage(repo, false);
+          if (msg) {
+            repo.inputBox.value = msg;
           }
         } catch (err) {
           vscode.window.showErrorMessage(`Smart Commit Error: ${err.message}`);
         }
       }
     );
+
+    if (!msg) return;
+
+    // Step B: Confirmation (Using modal dialog so buttons never auto-dismiss)
+    const confirmPush = getSetting('confirmBeforePush');
+    let proceedAction = 'Commit & Push';
+
+    if (confirmPush !== false) {
+      const firstLine = msg.split('\n')[0];
+      const choice = await vscode.window.showInformationMessage(
+        'Smart Commit: Commit & Push to Remote?',
+        {
+          modal: true,
+          detail: `Generated Message:\n"${firstLine}"\n\nWould you like to commit and push these changes to remote now?`
+        },
+        'Commit & Push',
+        'Only Commit'
+      );
+
+      if (!choice) return; // User cancelled or closed dialog
+      proceedAction = choice;
+    }
+
+    // Step C: Execute Commit & Push with dedicated progress
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: proceedAction === 'Commit & Push' ? 'Smart Commit: Committing and pushing to remote...' : 'Smart Commit: Committing changes...',
+        cancellable: false
+      },
+      async () => {
+        try {
+          await runGit(['commit', '-m', msg], cwd);
+          if (proceedAction === 'Commit & Push') {
+            await runGit(['push'], cwd);
+            vscode.window.showInformationMessage('Smart Commit: Successfully committed and pushed to remote!');
+          } else {
+            vscode.window.showInformationMessage('Smart Commit: Changes committed locally!');
+          }
+          repo.inputBox.value = '';
+        } catch (err) {
+          vscode.window.showErrorMessage(`Smart Commit Push Error: ${err.message}`);
+        }
+      }
+    );
   });
 
   // 5. Command: Generate Pull Request Description
-  const disposableGeneratePR = vscode.commands.registerCommand('smartCommit.generatePR', async () => {
-    const repo = getGitRepository();
+  const disposableGeneratePR = vscode.commands.registerCommand('smartCommit.generatePR', async (arg) => {
+    const repo = getTargetRepository(arg);
     if (!repo) {
       vscode.window.showErrorMessage('No active Git repository found.');
       return;
@@ -636,8 +665,8 @@ Please generate the full Pull Request description:`;
   });
 
   // 6. Command: Compare Branches & AI Conflict Advisor
-  const disposableCompare = vscode.commands.registerCommand('smartCommit.compareBranches', async () => {
-    const repo = getGitRepository();
+  const disposableCompare = vscode.commands.registerCommand('smartCommit.compareBranches', async (arg) => {
+    const repo = getTargetRepository(arg);
     if (!repo) {
       vscode.window.showErrorMessage('No active Git repository found.');
       return;
