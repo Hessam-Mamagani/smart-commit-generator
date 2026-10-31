@@ -62,12 +62,12 @@
       {
         "command": "smartCommit.compareBranches",
         "title": "Smart Commit: Compare Branches & Conflict Advisor",
-        "icon": "$(git-compare)"
+        "icon": "$(diff)"
       },
       {
         "command": "smartCommit.syncToBranch",
         "title": "Smart Commit: Safe Sync & Push to Branch",
-        "icon": "$(repo-sync)"
+        "icon": "$(git-merge)"
       },
       {
         "command": "smartCommit.enableFastMode",

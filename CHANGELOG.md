@@ -5,8 +5,8 @@ All notable changes to the "Smart Commit Generator AI" extension will be documen
 ## [1.3.0] - 2026-10-31
 
 ### Added
-- **Interactive Branch Comparison with Security Scan & Direct Push**: Branch comparison (`$(git-compare)`) now runs a live pre-merge conflict check and security audit (detects API keys, tokens, and private keys). If clean, provides direct 1-click actions: **Sync & Push**, **Generate PR Description**, or **Cancel**. If conflicts exist, blocks pushing and guides resolution.
-- **Safe Branch Sync & Push (`$(repo-sync)`)**: Sync and push changes from your working branch into any target branch (e.g., `publish`, `dev`, `staging`). Checks for merge conflicts in memory first with `git merge-tree`; only merges and pushes if clean, otherwise alerts you and opens the AI Conflict Advisor.
+- **Interactive Branch Comparison with Security Scan & Direct Push**: Branch comparison (`$(diff)`) now runs a live pre-merge conflict check and security audit (detects API keys, tokens, and private keys). If clean, provides direct 1-click actions: **Sync & Push**, **Generate PR Description**, or **Cancel**. If conflicts exist, blocks pushing and guides resolution.
+- **Safe Branch Sync & Push (`$(git-merge)`)**: Sync and push changes from your working branch into any target branch (e.g., `publish`, `dev`, `staging`). Checks for merge conflicts in memory first with `git merge-tree`; only merges and pushes if clean, otherwise alerts you and opens the AI Conflict Advisor.
 - **Fast Mode vs Safe Mode Dynamic Toggle**: 1-click button in the Source Control title bar and status bar that visually switches between `$(shield)` (Safe Mode) and `$(zap)` (Fast Mode) in real time. Fast Mode stages, generates, commits, and pushes instantly with zero dialogs. Safe Mode shows the review modal before pushing.
 - **Dynamic Status Bar**: Displays current operating mode (`$(zap) Smart Git (Fast)` vs `$(shield) Smart Git (Safe)`) with quick-action launcher.
 - **New Shortcuts**: <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd> for Safe Branch Sync & Push, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd> for Toggle Fast Mode.

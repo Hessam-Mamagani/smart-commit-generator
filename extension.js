@@ -535,7 +535,7 @@ function activate(context) {
         command: 'smartCommit.generateCommitAndPush'
       },
       {
-        label: '$(repo-sync) Safe Sync & Push to Branch',
+        label: '$(git-merge) Safe Sync & Push to Branch',
         description: 'Auto-checks for conflicts before merging & pushing to target branch',
         command: 'smartCommit.syncToBranch'
       },
@@ -545,7 +545,7 @@ function activate(context) {
         command: 'smartCommit.generatePR'
       },
       {
-        label: '$(git-compare) Compare Branches & Conflict Advisor',
+        label: '$(diff) Compare Branches & Conflict Advisor',
         description: 'Dry-run merge analysis and AI conflict resolution guide',
         command: 'smartCommit.compareBranches'
       },
