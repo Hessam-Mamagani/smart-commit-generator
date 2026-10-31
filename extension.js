@@ -84,8 +84,11 @@ Output strictly formatted GitHub Markdown.`;
 
 function getSetting(key) {
   const config = vscode.workspace.getConfiguration('smartCommit');
+  let val = config.get(key);
+  if (val !== undefined && val !== null && val !== '') return val;
+
   const globalConfig = vscode.workspace.getConfiguration();
-  let val = config.get(key) || globalConfig.get(`smartCommit.${key}`);
+  val = globalConfig.get(`smartCommit.${key}`);
   if (val !== undefined && val !== null && val !== '') return val;
 
   // Fail-safe direct read from local settings.json
@@ -131,7 +134,6 @@ function getTargetRepository(arg) {
   const api = gitExtension.exports.getAPI(1);
   if (!api || !api.repositories || api.repositories.length === 0) return null;
 
-  // 1. If triggered from a specific repository toolbar in SCM
   if (arg) {
     const uri = arg.rootUri || (arg.repository && arg.repository.rootUri);
     if (uri) {
@@ -140,14 +142,12 @@ function getTargetRepository(arg) {
     }
   }
 
-  // 2. If an editor document is open, match its repository
   const activeDocUri = vscode.window.activeTextEditor?.document?.uri;
   if (activeDocUri) {
     const match = api.repositories.find(r => activeDocUri.fsPath.toLowerCase().startsWith(r.rootUri.fsPath.toLowerCase()));
     if (match) return match;
   }
 
-  // 3. Fallback to active repository or first in list
   return api.repositories[0];
 }
 
@@ -401,17 +401,53 @@ async function checkMergeConflicts(cwd, currentBranch, targetBranch) {
   };
 }
 
+function updateStatusBarItem(statusBar) {
+  const confirmPush = getSetting('confirmBeforePush');
+  const isFast = confirmPush === false;
+  statusBar.text = isFast ? '$(zap) Smart Git (Fast)' : '$(shield) Smart Git (Safe)';
+  statusBar.tooltip = isFast
+    ? 'Smart Git: Fast Mode active (Instant 1-click push without dialog). Click for actions.'
+    : 'Smart Git: Safe Mode active (Confirms before pushing). Click for actions.';
+}
+
 function activate(context) {
   // 1. Status Bar Quick Launcher
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusBar.text = '$(sparkle) Smart Git';
-  statusBar.tooltip = 'Smart Git Assistant (Click for actions)';
   statusBar.command = 'smartCommit.quickMenu';
+  updateStatusBarItem(statusBar);
   statusBar.show();
-  context.subscriptions.push(statusBar);
 
-  // 2. Interactive Quick Menu
+  // 2. Initial Fast Mode context for dynamic toolbar button icons
+  const initialFast = getSetting('confirmBeforePush') === false;
+  vscode.commands.executeCommand('setContext', 'smartCommit:isFastMode', initialFast);
+
+  // Auto-sync context and status bar when configuration changes
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('smartCommit')) {
+        const isFast = getSetting('confirmBeforePush') === false;
+        vscode.commands.executeCommand('setContext', 'smartCommit:isFastMode', isFast);
+        updateStatusBarItem(statusBar);
+      }
+    })
+  );
+
+  // Fast Mode toggle helper
+  async function setFastPushMode(enableFast) {
+    await vscode.workspace.getConfiguration('smartCommit').update('confirmBeforePush', !enableFast, vscode.ConfigurationTarget.Global);
+    await vscode.commands.executeCommand('setContext', 'smartCommit:isFastMode', enableFast);
+    updateStatusBarItem(statusBar);
+    vscode.window.showInformationMessage(
+      enableFast
+        ? 'Smart Git: Fast Mode enabled (Instant 1-click push with zero dialogs).'
+        : 'Smart Git: Safe Mode enabled (Shows confirmation modal before pushing).'
+    );
+  }
+
+  // 3. Interactive Quick Menu
   const disposableQuickMenu = vscode.commands.registerCommand('smartCommit.quickMenu', async () => {
+    const isFast = getSetting('confirmBeforePush') === false;
+
     const choice = await vscode.window.showQuickPick([
       {
         label: '$(sparkle) Generate Commit Message',
@@ -420,8 +456,13 @@ function activate(context) {
       },
       {
         label: '$(cloud-upload) Generate, Commit & Push',
-        description: 'One-click auto-stage, AI message, commit and remote push',
+        description: isFast ? 'Instant 1-click push (Fast Mode)' : 'Stage, commit, and push with confirmation',
         command: 'smartCommit.generateCommitAndPush'
+      },
+      {
+        label: '$(repo-sync) Safe Sync & Push to Branch',
+        description: 'Auto-checks for conflicts before merging & pushing to target branch',
+        command: 'smartCommit.syncToBranch'
       },
       {
         label: '$(git-pull-request) Generate PR Description',
@@ -432,6 +473,11 @@ function activate(context) {
         label: '$(git-compare) Compare Branches & Conflict Advisor',
         description: 'Dry-run merge analysis and AI conflict resolution guide',
         command: 'smartCommit.compareBranches'
+      },
+      {
+        label: isFast ? '$(shield) Switch to Safe Mode' : '$(zap) Switch to Fast Mode (Instant Push)',
+        description: isFast ? 'Show confirmation dialog before push' : 'Skip confirmation dialog for instant push',
+        command: 'smartCommit.toggleFastPush'
       },
       {
         label: '$(gear) Extension Settings',
@@ -452,7 +498,21 @@ function activate(context) {
     }
   });
 
-  // 3. Command: Generate Message
+  // 4. Fast Mode Toggle Commands
+  const disposableToggleFast = vscode.commands.registerCommand('smartCommit.toggleFastPush', async () => {
+    const isFast = getSetting('confirmBeforePush') === false;
+    await setFastPushMode(!isFast);
+  });
+
+  const disposableEnableFast = vscode.commands.registerCommand('smartCommit.enableFastMode', async () => {
+    await setFastPushMode(true);
+  });
+
+  const disposableDisableFast = vscode.commands.registerCommand('smartCommit.disableFastMode', async () => {
+    await setFastPushMode(false);
+  });
+
+  // 4. Command: Generate Message
   const disposableGenerate = vscode.commands.registerCommand('smartCommit.generate', async (arg) => {
     const repo = getTargetRepository(arg);
     if (!repo) {
@@ -481,7 +541,7 @@ function activate(context) {
     );
   });
 
-  // 4. Command: Generate, Commit & Push (Modal prompt that never disappears)
+  // 5. Command: Generate, Commit & Push
   const disposableCommitAndPush = vscode.commands.registerCommand('smartCommit.generateCommitAndPush', async (arg) => {
     const repo = getTargetRepository(arg);
     if (!repo) {
@@ -492,7 +552,6 @@ function activate(context) {
     const cwd = repo.rootUri.fsPath;
     let msg = '';
 
-    // Step A: Stage & Generate Message
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -517,7 +576,6 @@ function activate(context) {
 
     if (!msg) return;
 
-    // Step B: Confirmation (Using modal dialog so buttons never auto-dismiss)
     const confirmPush = getSetting('confirmBeforePush');
     let proceedAction = 'Commit & Push';
 
@@ -533,11 +591,10 @@ function activate(context) {
         'Only Commit'
       );
 
-      if (!choice) return; // User cancelled or closed dialog
+      if (!choice) return;
       proceedAction = choice;
     }
 
-    // Step C: Execute Commit & Push with dedicated progress
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -561,7 +618,89 @@ function activate(context) {
     );
   });
 
-  // 5. Command: Generate Pull Request Description
+  // 6. Command: Safe Branch Sync & Push
+  const disposableSyncToBranch = vscode.commands.registerCommand('smartCommit.syncToBranch', async (arg) => {
+    const repo = getTargetRepository(arg);
+    if (!repo) {
+      vscode.window.showErrorMessage('No active Git repository found.');
+      return;
+    }
+
+    const cwd = repo.rootUri.fsPath;
+
+    // A. Check clean working tree
+    try {
+      const status = (await runGit(['status', '--short'], cwd)).trim();
+      if (status) {
+        vscode.window.showWarningMessage('Smart Git: Please commit or stash your working tree changes before syncing branches.');
+        return;
+      }
+    } catch (e) {}
+
+    // B. Get current and target branches
+    let currentBranch = '';
+    try {
+      currentBranch = (await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)).trim();
+    } catch (e) {
+      currentBranch = 'HEAD';
+    }
+
+    const branches = await getBranches(cwd, currentBranch);
+    if (branches.length === 0) {
+      vscode.window.showInformationMessage('No other branches found to sync with.');
+      return;
+    }
+
+    const targetBranch = await vscode.window.showQuickPick(branches, {
+      placeHolder: `Select target branch to sync "${currentBranch}" changes into:`,
+      title: 'Smart Git: Safe Branch Sync & Push'
+    });
+
+    if (!targetBranch) return;
+
+    // C. Dry-run conflict check
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Smart Git: Checking for conflicts between "${currentBranch}" and "${targetBranch}"...`,
+        cancellable: false
+      },
+      async () => {
+        try {
+          const conflictCheck = await checkMergeConflicts(cwd, currentBranch, targetBranch);
+          if (conflictCheck.hasConflicts) {
+            vscode.window.showErrorMessage(`Cannot sync to "${targetBranch}": Merge conflicts detected! Opening AI Conflict Advisor...`);
+            vscode.commands.executeCommand('smartCommit.compareBranches', arg);
+            return;
+          }
+
+          // D. Safe merge and push
+          const choice = await vscode.window.showInformationMessage(
+            `Smart Git: Zero conflicts! Sync "${currentBranch}" into "${targetBranch}"?`,
+            {
+              modal: true,
+              detail: `This operation will:\n1. Switch to "${targetBranch}"\n2. Merge latest changes from "${currentBranch}"\n3. Push to remote origin\n4. Switch back to "${currentBranch}"`
+            },
+            'Sync & Push Now'
+          );
+
+          if (choice !== 'Sync & Push Now') return;
+
+          await runGit(['checkout', targetBranch], cwd);
+          await runGit(['merge', currentBranch], cwd);
+          await runGit(['push', 'origin', targetBranch], cwd);
+          await runGit(['checkout', currentBranch], cwd);
+
+          vscode.window.showInformationMessage(`Smart Git: Successfully synced "${currentBranch}" into "${targetBranch}" and pushed to remote!`);
+        } catch (err) {
+          await runGit(['checkout', currentBranch], cwd).catch(() => {});
+          vscode.window.showErrorMessage(`Smart Git Sync Error: ${err.message}`);
+        }
+      }
+    );
+  });
+
+  // 7. Command: Generate Pull Request Description
   const disposableGeneratePR = vscode.commands.registerCommand('smartCommit.generatePR', async (arg) => {
     const repo = getTargetRepository(arg);
     if (!repo) {
@@ -664,7 +803,7 @@ Please generate the full Pull Request description:`;
     );
   });
 
-  // 6. Command: Compare Branches & AI Conflict Advisor
+  // 8. Command: Compare Branches & AI Conflict Advisor
   const disposableCompare = vscode.commands.registerCommand('smartCommit.compareBranches', async (arg) => {
     const repo = getTargetRepository(arg);
     if (!repo) {
@@ -820,8 +959,12 @@ Write a comprehensive branch comparison and architecture report:`;
   context.subscriptions.push(
     statusBar,
     disposableQuickMenu,
+    disposableToggleFast,
+    disposableEnableFast,
+    disposableDisableFast,
     disposableGenerate,
     disposableCommitAndPush,
+    disposableSyncToBranch,
     disposableGeneratePR,
     disposableCompare
   );

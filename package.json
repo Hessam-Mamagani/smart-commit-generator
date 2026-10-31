@@ -2,7 +2,7 @@
   "name": "smart-commit-generator-ai",
   "displayName": "Smart Commit Generator AI",
   "description": "Fast & accurate AI Git commit message generator powered by OpenAI & Google Gemini",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "publisher": "Hessam-Mamagani",
   "author": {
     "name": "Hessam Barasm Mamagani",
@@ -38,7 +38,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onView:workbench.scm"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -64,6 +65,26 @@
         "icon": "$(git-compare)"
       },
       {
+        "command": "smartCommit.syncToBranch",
+        "title": "Smart Commit: Safe Sync & Push to Branch",
+        "icon": "$(repo-sync)"
+      },
+      {
+        "command": "smartCommit.enableFastMode",
+        "title": "Smart Git: Safe Mode Active (Click to switch to Fast Mode)",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "smartCommit.disableFastMode",
+        "title": "Smart Git: Fast Mode Active (Click to switch to Safe Mode)",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "smartCommit.toggleFastPush",
+        "title": "Smart Commit: Toggle Fast Push / Safe Mode",
+        "icon": "$(zap)"
+      },
+      {
         "command": "smartCommit.quickMenu",
         "title": "Smart Commit: Quick Menu",
         "icon": "$(sparkle)"
@@ -81,9 +102,19 @@
         "mac": "cmd+alt+p"
       },
       {
+        "command": "smartCommit.syncToBranch",
+        "key": "ctrl+alt+s",
+        "mac": "cmd+alt+s"
+      },
+      {
         "command": "smartCommit.compareBranches",
         "key": "ctrl+alt+c",
         "mac": "cmd+alt+c"
+      },
+      {
+        "command": "smartCommit.toggleFastPush",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t"
       }
     ],
     "menus": {
@@ -97,12 +128,26 @@
           "group": "navigation@2"
         },
         {
-          "command": "smartCommit.generatePR",
+          "command": "smartCommit.syncToBranch",
           "group": "navigation@3"
         },
         {
-          "command": "smartCommit.compareBranches",
+          "command": "smartCommit.generatePR",
           "group": "navigation@4"
+        },
+        {
+          "command": "smartCommit.compareBranches",
+          "group": "navigation@5"
+        },
+        {
+          "command": "smartCommit.enableFastMode",
+          "when": "!smartCommit:isFastMode",
+          "group": "navigation@6"
+        },
+        {
+          "command": "smartCommit.disableFastMode",
+          "when": "smartCommit:isFastMode",
+          "group": "navigation@6"
         }
       ],
       "view/title": [
@@ -117,14 +162,39 @@
           "group": "navigation@2"
         },
         {
-          "command": "smartCommit.generatePR",
+          "command": "smartCommit.syncToBranch",
           "when": "view == workbench.scm",
           "group": "navigation@3"
         },
         {
-          "command": "smartCommit.compareBranches",
+          "command": "smartCommit.generatePR",
           "when": "view == workbench.scm",
           "group": "navigation@4"
+        },
+        {
+          "command": "smartCommit.compareBranches",
+          "when": "view == workbench.scm",
+          "group": "navigation@5"
+        },
+        {
+          "command": "smartCommit.enableFastMode",
+          "when": "view == workbench.scm && !smartCommit:isFastMode",
+          "group": "navigation@6"
+        },
+        {
+          "command": "smartCommit.disableFastMode",
+          "when": "view == workbench.scm && smartCommit:isFastMode",
+          "group": "navigation@6"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "smartCommit.enableFastMode",
+          "when": "false"
+        },
+        {
+          "command": "smartCommit.disableFastMode",
+          "when": "false"
         }
       ]
     },
