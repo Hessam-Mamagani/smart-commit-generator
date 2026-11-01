@@ -1092,6 +1092,16 @@ function activate(context) {
             command: "smartCommit.generateCommitAndPush",
           },
           {
+            label: "$(cloud-upload) Push Commits to Remote",
+            description: "Push pending local commits to origin",
+            command: "smartCommit.pushCommits",
+          },
+          {
+            label: "$(discard) Undo Last Commit (Soft Reset)",
+            description: "Uncommit to staged area & restore message to edit or regenerate with AI",
+            command: "smartCommit.undoCommit",
+          },
+          {
             label: "$(git-merge) Safe Sync & Push to Branch",
             description:
               "Auto-checks for conflicts before merging & pushing to target branch",
@@ -2125,6 +2135,15 @@ Write a comprehensive branch comparison and architecture report:`;
       let msg = (customMsg || (repo.inputBox && repo.inputBox.value) || "").trim();
 
       if (!msg) {
+        try {
+          const statusRaw = (await runGit(["status", "--porcelain=v1", "-u"], cwd)).trim();
+          if (!statusRaw) {
+            return vscode.commands.executeCommand("smartCommit.pushCommits");
+          }
+        } catch (e) {}
+      }
+
+      if (!msg) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
@@ -2221,7 +2240,30 @@ Write a comprehensive branch comparison and architecture report:`;
           return;
         }
         const cwd = repo.rootUri.fsPath;
-        const commitMsg = (customMsg || (repo.inputBox && repo.inputBox.value) || "").trim();
+        let commitMsg = (customMsg || (repo.inputBox && repo.inputBox.value) || "").trim();
+        if (!commitMsg) {
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: "Smart Git: Generating commit message with AI...",
+              cancellable: false,
+            },
+            async () => {
+              try {
+                const stagedCheck = (await runGit(["diff", "--cached"], cwd)).trim();
+                if (!stagedCheck) {
+                  await runGit(["add", "-A"], cwd);
+                }
+                commitMsg = await generateCommitMessage(repo, false);
+                if (commitMsg && repo.inputBox) {
+                  repo.inputBox.value = commitMsg;
+                }
+              } catch (e) {
+                vscode.window.showErrorMessage(`Smart Git AI Error: ${e.message}`);
+              }
+            },
+          );
+        }
         if (!commitMsg) {
           vscode.window.showWarningMessage(
             "Smart Git: Please enter or generate a commit message first.",
@@ -2256,7 +2298,109 @@ Write a comprehensive branch comparison and architecture report:`;
     },
   );
 
-  // 14. Command: Switch / Checkout Branch
+  // 14. Command: Push Commits to Remote (with auto-upstream)
+  const disposablePushCommits = vscode.commands.registerCommand(
+    "smartCommit.pushCommits",
+    async () => {
+      try {
+        const repo = getTargetRepository();
+        if (!repo) {
+          vscode.window.showErrorMessage("No active Git repository found.");
+          return;
+        }
+        const cwd = repo.rootUri.fsPath;
+        let branch = "HEAD";
+        try {
+          branch = (
+            await runGit(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
+          ).trim();
+        } catch (e) {}
+
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Smart Git: Pushing commits on '${branch}' to remote...`,
+            cancellable: false,
+          },
+          async () => {
+            try {
+              await runGit(["push"], cwd);
+              vscode.window.showInformationMessage(
+                `Smart Git: Successfully pushed commits to remote!`,
+              );
+            } catch (err) {
+              const errLower = (err.message || "").toLowerCase();
+              if (
+                errLower.includes("no upstream branch") ||
+                errLower.includes("has no upstream") ||
+                errLower.includes("upstream")
+              ) {
+                await runGit(["push", "--set-upstream", "origin", branch], cwd);
+                vscode.window.showInformationMessage(
+                  `Smart Git: Pushed commits and set upstream to 'origin/${branch}'!`,
+                );
+              } else {
+                throw err;
+              }
+            }
+            if (globalNotifyAllViews) globalNotifyAllViews();
+            else if (actionsViewProvider) actionsViewProvider.updateState();
+          },
+        );
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Smart Git Push Error: ${err.message}`,
+        );
+      }
+    },
+  );
+
+  // 15. Command: Undo Last Commit (Soft Reset)
+  const disposableUndoCommit = vscode.commands.registerCommand(
+    "smartCommit.undoCommit",
+    async () => {
+      try {
+        const repo = getTargetRepository();
+        if (!repo) {
+          vscode.window.showErrorMessage("No active Git repository found.");
+          return;
+        }
+        const cwd = repo.rootUri.fsPath;
+
+        let lastMsg = "";
+        let shortHash = "";
+        try {
+          lastMsg = (
+            await runGit(["log", "-1", "--pretty=format:%B"], cwd)
+          ).trim();
+          shortHash = (
+            await runGit(["log", "-1", "--pretty=format:%h"], cwd)
+          ).trim();
+        } catch (e) {
+          vscode.window.showWarningMessage("Smart Git: No commits found to undo.");
+          return;
+        }
+
+        await runGit(["reset", "--soft", "HEAD~1"], cwd);
+
+        if (repo.inputBox) {
+          repo.inputBox.value = lastMsg;
+        }
+
+        vscode.window.showInformationMessage(
+          `Smart Git: Undid commit [${shortHash || "HEAD"}]! Changes are staged & message restored to edit or regenerate with AI.`,
+        );
+
+        notifyAllViews({ commitText: lastMsg });
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Smart Git Undo Error: ${err.message}`,
+        );
+      }
+    },
+  );
+
+  // 16. Command: Switch / Checkout Branch
   const disposableSwitchBranch = vscode.commands.registerCommand(
     "smartCommit.switchBranch",
     async (arg) => {
@@ -2405,6 +2549,8 @@ Write a comprehensive branch comparison and architecture report:`;
     disposableSelectProvider,
     disposableSelectRepo,
     disposableCommitOnly,
+    disposablePushCommits,
+    disposableUndoCommit,
     disposableSwitchBranch,
     viewDisposable1,
     viewDisposable2,
@@ -2444,6 +2590,13 @@ class SmartGitViewProvider {
           break;
         case "commitOnly":
           vscode.commands.executeCommand("smartCommit.commitOnly", data.text);
+          break;
+        case "undoCommit":
+          vscode.commands.executeCommand("smartCommit.undoCommit");
+          break;
+        case "pushCommits":
+        case "pushPending":
+          vscode.commands.executeCommand("smartCommit.pushCommits");
           break;
         case "selectRepo":
           vscode.commands.executeCommand("smartCommit.selectRepository");
@@ -2683,6 +2836,8 @@ class SmartGitViewProvider {
     let branch = "HEAD";
     let stagedCount = 0;
     let unstagedCount = 0;
+    let outgoingCommits = [];
+    let outgoingCount = 0;
     let commitText = extra.commitText !== undefined ? extra.commitText : "";
     let repoName = "";
     let repoCount = 1;
@@ -2706,6 +2861,83 @@ class SmartGitViewProvider {
         if (extra.commitText === undefined && repo.inputBox) {
           commitText = repo.inputBox.value || "";
         }
+        // Retrieve outgoing (unpushed) commits
+        try {
+          let logStr = "";
+          try {
+            logStr = (
+              await runGit(
+                [
+                  "log",
+                  "@{u}..HEAD",
+                  "--pretty=format:%H%x1f%h%x1f%s%x1f%ar%x1f%an%x1f%B%x1e",
+                ],
+                cwd,
+              )
+            ).trim();
+          } catch (err1) {
+            try {
+              logStr = (
+                await runGit(
+                  [
+                    "log",
+                    `origin/${branch}..HEAD`,
+                    "--pretty=format:%H%x1f%h%x1f%s%x1f%ar%x1f%an%x1f%B%x1e",
+                  ],
+                  cwd,
+                )
+              ).trim();
+            } catch (err2) {
+              const remotes = (
+                await runGit(["remote"], cwd).catch(() => "")
+              ).trim();
+              if (remotes) {
+                for (const base of [
+                  "origin/main",
+                  "origin/master",
+                  "origin/HEAD",
+                ]) {
+                  try {
+                    logStr = (
+                      await runGit(
+                        [
+                          "log",
+                          `${base}..HEAD`,
+                          "--pretty=format:%H%x1f%h%x1f%s%x1f%ar%x1f%an%x1f%B%x1e",
+                        ],
+                        cwd,
+                      )
+                    ).trim();
+                    if (logStr) break;
+                  } catch (e3) {}
+                }
+              }
+            }
+          }
+
+          if (logStr) {
+            const rawChunks = logStr.split("\x1e").filter(Boolean);
+            outgoingCommits = rawChunks.map((chunk) => {
+              const parts = chunk.split("\x1f");
+              const hash = parts[0] || "";
+              const shortHash = parts[1] || (hash ? hash.substring(0, 7) : "");
+              const subject = parts[2] || "";
+              const time = parts[3] || "";
+              const author = parts[4] || "";
+              const fullMsg = parts[5] || subject;
+              return {
+                hash,
+                shortHash,
+                subject,
+                time,
+                author,
+                fullMsg: fullMsg.trim(),
+              };
+            });
+            outgoingCount = outgoingCommits.length;
+          }
+        } catch (e) {}
+
         const stat = await runGit(["status", "--porcelain=v1", "-u"], cwd);
         const lines = stat.split("\n").filter(Boolean);
         lines.forEach((l) => {
@@ -2775,6 +3007,8 @@ class SmartGitViewProvider {
       branch,
       stagedCount,
       unstagedCount,
+      outgoingCount,
+      outgoingCommits,
       commitText,
       files,
     });
@@ -2960,11 +3194,14 @@ class SmartGitViewProvider {
       background: #1abc9c;
     }
     .btn-commit-only {
-      background: var(--vscode-button-secondaryBackground, #2d3748);
-      color: var(--vscode-button-secondaryForeground, #fff);
+      background: #252b37;
+      border: 1px solid #3c4659;
+      color: #f1f5f9;
     }
     .btn-commit-only:hover {
-      background: var(--vscode-button-secondaryHoverBackground, #4a5568);
+      background: #323a4b;
+      border-color: #515f78;
+      color: #ffffff;
     }
     .btn-row {
       display: flex;
@@ -3004,6 +3241,158 @@ class SmartGitViewProvider {
     }
     .grid-btn-full {
       grid-column: span 2;
+    }
+
+    /* Outgoing Commits Section */
+    .outgoing-container {
+      margin: 8px 0;
+      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
+      border-radius: 5px;
+      background: var(--vscode-editor-background, #1e1e1e);
+      overflow: hidden;
+    }
+    .outgoing-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      cursor: pointer;
+      user-select: none;
+      background: var(--vscode-sideBarSectionHeader-background, rgba(255,255,255,0.03));
+      border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+    }
+    .outgoing-header:hover {
+      background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.06));
+    }
+    .outgoing-header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .outgoing-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      opacity: 0.9;
+    }
+    .outgoing-count-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: var(--vscode-badge-background, #3a3d41);
+      color: var(--vscode-badge-foreground, #ffffff);
+      transition: background 0.15s ease;
+    }
+    .outgoing-count-badge.has-outgoing {
+      background: #0078d4;
+      color: #ffffff;
+    }
+    .outgoing-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .outgoing-push-btn {
+      background: #0e639c;
+      color: #ffffff;
+      border: none;
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+    .outgoing-push-btn:hover {
+      background: #1177bb;
+    }
+    .outgoing-list {
+      max-height: 180px;
+      overflow-y: auto;
+      padding: 3px 0;
+    }
+    .outgoing-list.collapsed {
+      display: none;
+    }
+    .empty-outgoing {
+      padding: 10px 8px;
+      font-size: 11px;
+      opacity: 0.6;
+      text-align: center;
+      font-style: italic;
+    }
+    .commit-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+      font-size: 11px;
+      transition: background 0.1s;
+      gap: 8px;
+      border-radius: 4px;
+    }
+    .commit-item:hover {
+      background: var(--vscode-list-hoverBackground, #2a2d2e);
+    }
+    .commit-item-left {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .commit-hash {
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 10px;
+      font-weight: 600;
+      color: #4fc1ff;
+      background: rgba(79, 193, 255, 0.12);
+      padding: 1px 4px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .commit-subject {
+      font-weight: 500;
+      color: var(--vscode-foreground);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+    .commit-time {
+      font-size: 10px;
+      opacity: 0.5;
+      flex-shrink: 0;
+    }
+    .commit-actions {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+    .commit-action-btn-undo {
+      background: rgba(234, 179, 8, 0.15);
+      border: 1px solid rgba(234, 179, 8, 0.35);
+      color: #eab308;
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      transition: all 0.12s ease;
+    }
+    .commit-action-btn-undo:hover {
+      background: rgba(234, 179, 8, 0.3);
+      border-color: #facc15;
+      color: #fef08a;
     }
 
     /* Changed Files Section */
@@ -3308,6 +3697,29 @@ class SmartGitViewProvider {
     </div>
   </div>
 
+  <!-- Outgoing Commits Section (Waiting to Push) -->
+  <div class="outgoing-container" id="outgoingContainer">
+    <div class="outgoing-header" id="outgoingToggle" title="Click to toggle outgoing commits list">
+      <div class="outgoing-header-left">
+        <span class="chevron" id="outgoingChevron">&#9662;</span>
+        <span class="outgoing-title">OUTGOING COMMITS</span>
+        <span class="outgoing-count-badge" id="outgoingCountBadge">0</span>
+      </div>
+      <div class="outgoing-actions">
+        <button class="outgoing-push-btn" id="btnPushOutgoing" title="Push pending commits to remote" style="display:none;">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 1l4 4.2h-2.8V10H6.8V5.2H4L8 1zM2 11h12c1.1 0 2 .9 2 2s-.9 2-2 2H2c-1.1 0-2-.9-2-2s.9-2 2-2z"/>
+          </svg>
+          <span id="btnPushOutgoingText">Push</span>
+        </button>
+        <span class="changes-action-btn" id="btnRefreshOutgoing" title="Refresh outgoing commits">&#8635;</span>
+      </div>
+    </div>
+    <div class="outgoing-list" id="outgoingList">
+      <div class="empty-outgoing">✓ All commits pushed to remote</div>
+    </div>
+  </div>
+
   <!-- Changed Files List -->
   <div class="changes-container" id="changesContainer">
     <div class="changes-header" id="changesToggle" title="Click to toggle changed files list">
@@ -3337,6 +3749,9 @@ class SmartGitViewProvider {
     </div>
     <div class="status-item clickable" id="branchInfo" title="Click to switch or checkout branch">
       <span>Branch:</span> <strong id="branchName">main</strong>
+    </div>
+    <div class="status-item clickable" id="outgoingInfo" title="Commits waiting to be pushed (Click to push to remote)">
+      <span id="outgoingText" style="display:none; color: #4fc1ff; font-weight: 600;">↑ 0 to push</span>
     </div>
     <div class="status-item" id="stagingInfo" title="Staged and unstaged changes">
       <span id="stagedText">0 staged</span> &bull; <span id="unstagedText">0 modified</span>
@@ -3400,6 +3815,137 @@ class SmartGitViewProvider {
     document.getElementById('branchInfo').addEventListener('click', () => {
       vscode.postMessage({ command: 'switchBranch' });
     });
+
+    // Outgoing Commits rendering
+    let currentOutgoing = [];
+    function renderOutgoing(commits) {
+      currentOutgoing = commits || [];
+      const list = document.getElementById('outgoingList');
+      const badge = document.getElementById('outgoingCountBadge');
+      const btnPush = document.getElementById('btnPushOutgoing');
+      const btnPushText = document.getElementById('btnPushOutgoingText');
+      const outgoingInfo = document.getElementById('outgoingInfo');
+      const outgoingText = document.getElementById('outgoingText');
+
+      badge.textContent = currentOutgoing.length;
+      if (currentOutgoing.length > 0) {
+        badge.classList.add('has-outgoing');
+        btnPush.style.display = 'inline-flex';
+        btnPushText.textContent = 'Push (' + currentOutgoing.length + ')';
+        if (outgoingText && outgoingInfo) {
+          outgoingText.textContent = '↑ ' + currentOutgoing.length + ' to push';
+          outgoingText.style.display = 'inline';
+        }
+      } else {
+        badge.classList.remove('has-outgoing');
+        btnPush.style.display = 'none';
+        if (outgoingText && outgoingInfo) {
+          outgoingText.style.display = 'none';
+        }
+      }
+
+      if (!currentOutgoing || currentOutgoing.length === 0) {
+        list.innerHTML = '<div class="empty-outgoing">✓ All commits pushed to remote</div>';
+        return;
+      }
+
+      list.innerHTML = '';
+      currentOutgoing.forEach((commit, idx) => {
+        const item = document.createElement('div');
+        item.className = 'commit-item';
+
+        const left = document.createElement('div');
+        left.className = 'commit-item-left';
+
+        const hashSpan = document.createElement('span');
+        hashSpan.className = 'commit-hash';
+        hashSpan.textContent = commit.shortHash || (commit.hash ? commit.hash.substring(0, 7) : 'commit');
+        hashSpan.title = 'Commit ' + (commit.hash || '') + ' (Click to copy)';
+        hashSpan.style.cursor = 'pointer';
+        hashSpan.addEventListener('click', (e) => {
+          e.stopPropagation();
+          navigator.clipboard?.writeText(commit.hash || commit.shortHash || '');
+        });
+
+        const subjectSpan = document.createElement('span');
+        subjectSpan.className = 'commit-subject';
+        subjectSpan.textContent = commit.subject || '(no commit message)';
+        subjectSpan.title = commit.fullMsg || commit.subject || '';
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'commit-time';
+        timeSpan.textContent = commit.time || '';
+
+        left.appendChild(hashSpan);
+        left.appendChild(subjectSpan);
+        if (commit.time) {
+          left.appendChild(timeSpan);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'commit-actions';
+
+        if (idx === 0) {
+          const btnUndo = document.createElement('button');
+          btnUndo.className = 'commit-action-btn-undo';
+          btnUndo.title = 'Undo this commit (soft reset) — moves files back to staged & restores message in editor to edit or regenerate with AI';
+          btnUndo.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 3.5a.75.75 0 0 0-1.28-.53l-3 3a.75.75 0 0 0 0 1.06l3 3a.75.75 0 0 0 1.28-.53V7.75h4.75a4.5 4.5 0 0 1 4.5 4.5v.75a.75.75 0 0 0 1.5 0v-.75a6 6 0 0 0-6-6H4.5V3.5z"/></svg><span>Undo</span>';
+          btnUndo.addEventListener('click', (e) => {
+            e.stopPropagation();
+            vscode.postMessage({ command: 'undoCommit' });
+          });
+          actions.appendChild(btnUndo);
+        }
+
+        const btnCopy = document.createElement('button');
+        btnCopy.className = 'file-action-btn';
+        btnCopy.title = 'Copy commit message';
+        btnCopy.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5A1.75 1.75 0 0 1 5 6.75v1.5A1.75 1.75 0 0 1 3.25 10h-1.5A1.75 1.75 0 0 1 0 8.25v-1.5zm11 0c0-.966.784-1.75 1.75-1.75h1.5A1.75 1.75 0 0 1 16 6.75v1.5A1.75 1.75 0 0 1 14.25 10h-1.5A1.75 1.75 0 0 1 11 8.25v-1.5z"/><path d="M5 2.75C5 1.784 5.784 1 6.75 1h2.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 9.25 15h-2.5A1.75 1.75 0 0 1 5 13.25V2.75z"/></svg>';
+        btnCopy.addEventListener('click', (e) => {
+          e.stopPropagation();
+          navigator.clipboard?.writeText(commit.fullMsg || commit.subject || '');
+        });
+        actions.appendChild(btnCopy);
+
+        item.appendChild(left);
+        item.appendChild(actions);
+        list.appendChild(item);
+      });
+    }
+
+    const outgoingToggle = document.getElementById('outgoingToggle');
+    const outgoingList = document.getElementById('outgoingList');
+    const outgoingChevron = document.getElementById('outgoingChevron');
+    if (outgoingToggle) {
+      outgoingToggle.addEventListener('click', (e) => {
+        if (e.target.id === 'btnPushOutgoing' || e.target.closest('#btnPushOutgoing') || e.target.id === 'btnRefreshOutgoing') return;
+        outgoingList.classList.toggle('collapsed');
+        outgoingChevron.classList.toggle('collapsed');
+      });
+    }
+
+    const btnPushOutgoing = document.getElementById('btnPushOutgoing');
+    if (btnPushOutgoing) {
+      btnPushOutgoing.addEventListener('click', (e) => {
+        e.stopPropagation();
+        vscode.postMessage({ command: 'pushCommits' });
+      });
+    }
+
+    const btnRefreshOutgoing = document.getElementById('btnRefreshOutgoing');
+    if (btnRefreshOutgoing) {
+      btnRefreshOutgoing.addEventListener('click', (e) => {
+        e.stopPropagation();
+        vscode.postMessage({ command: 'refresh' });
+      });
+    }
+
+    const outgoingInfo = document.getElementById('outgoingInfo');
+    if (outgoingInfo) {
+      outgoingInfo.addEventListener('click', () => {
+        vscode.postMessage({ command: 'pushCommits' });
+      });
+    }
 
     // Files List rendering
     let currentFiles = [];
@@ -3625,6 +4171,10 @@ class SmartGitViewProvider {
 
         if (msg.files !== undefined) {
           renderFiles(msg.files);
+        }
+
+        if (msg.outgoingCommits !== undefined) {
+          renderOutgoing(msg.outgoingCommits);
         }
       }
     });

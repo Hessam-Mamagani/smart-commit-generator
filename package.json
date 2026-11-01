@@ -144,6 +144,16 @@
         "command": "smartCommit.switchBranch",
         "title": "Smart Git: Switch / Checkout Branch",
         "icon": "$(git-branch)"
+      },
+      {
+        "command": "smartCommit.undoCommit",
+        "title": "Smart Git: Undo Last Commit (Soft Reset)",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "smartCommit.pushCommits",
+        "title": "Smart Git: Push Commits to Remote",
+        "icon": "$(cloud-upload)"
       }
     ],
     "keybindings": [
