@@ -2,6 +2,15 @@
 
 All notable changes to the "Smart Commit Generator AI" extension will be documented in this file.
 
+## [1.4.6] - 2026-11-01
+
+### Added & Changed
+- **GPLv3 License Protection**: Switched project license from MIT to GNU General Public License v3.0 (GPL-3.0) to protect the software from closed-source commercial exploitation while keeping it fully public and open-source.
+- **Fixed Marketplace Badges**: Replaced deprecated Shields.io badge with `vsmarketplacebadges.dev` to resolve the "retired badge" error.
+- **Automated Release Changelog Generation**: Integrated automatic commit log parsing into the release flow to keep `CHANGELOG.md` up-to-date with every version bump.
+
+---
+
 ## [1.4.5] - 2026-11-01
 
 ### Added & Improved
