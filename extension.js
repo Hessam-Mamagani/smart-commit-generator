@@ -1983,6 +1983,92 @@ Write a comprehensive branch comparison and architecture report:`;
 
   globalNotifyAllViews = notifyAllViews;
 
+  // Real-time automatic Git & file changes synchronization
+  let autoRefreshTimer = null;
+  function debouncedAutoRefresh() {
+    const isVisible =
+      (actionsViewProvider._view && actionsViewProvider._view.visible) ||
+      (actionsViewScmProvider._view && actionsViewScmProvider._view.visible);
+    if (!isVisible) return;
+
+    if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+    autoRefreshTimer = setTimeout(() => {
+      notifyAllViews();
+    }, 350);
+  }
+
+  // 1. Hook into VS Code Git extension repository state changes
+  function setupGitListeners() {
+    const gitExtension = vscode.extensions.getExtension("vscode.git");
+    if (!gitExtension) return;
+    const gitApi = gitExtension.exports?.getAPI ? gitExtension.exports.getAPI(1) : null;
+    if (!gitApi) return;
+
+    const subscribedRepos = new Set();
+    const subscribeRepo = (repo) => {
+      if (!repo || !repo.state || subscribedRepos.has(repo.rootUri.fsPath)) return;
+      subscribedRepos.add(repo.rootUri.fsPath);
+      context.subscriptions.push(
+        repo.state.onDidChange(() => {
+          debouncedAutoRefresh();
+        })
+      );
+    };
+
+    if (gitApi.repositories) {
+      gitApi.repositories.forEach(subscribeRepo);
+    }
+
+    context.subscriptions.push(
+      gitApi.onDidOpenRepository((repo) => {
+        subscribeRepo(repo);
+        debouncedAutoRefresh();
+      })
+    );
+
+    if (gitApi.onDidCloseRepository) {
+      context.subscriptions.push(
+        gitApi.onDidCloseRepository(() => {
+          debouncedAutoRefresh();
+        })
+      );
+    }
+  }
+
+  const gitExt = vscode.extensions.getExtension("vscode.git");
+  if (gitExt) {
+    if (gitExt.isActive) {
+      setupGitListeners();
+    } else {
+      gitExt.activate().then(setupGitListeners, () => {});
+    }
+  }
+
+  // 2. Automatically refresh when files are saved
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument((doc) => {
+      if (doc.uri.scheme === "file") {
+        debouncedAutoRefresh();
+      }
+    })
+  );
+
+  // 3. Automatically refresh when files are created, deleted, or renamed in workspace
+  context.subscriptions.push(
+    vscode.workspace.onDidCreateFiles(() => debouncedAutoRefresh()),
+    vscode.workspace.onDidDeleteFiles(() => debouncedAutoRefresh()),
+    vscode.workspace.onDidRenameFiles(() => debouncedAutoRefresh())
+  );
+
+  // 4. Automatically refresh when switching active editor tabs
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (editor && editor.document && editor.document.uri.scheme === "file") {
+        debouncedAutoRefresh();
+      }
+    })
+  );
+
   // 11. Command: Select Active Repository
   const disposableSelectRepo = vscode.commands.registerCommand(
     "smartCommit.selectRepository",
@@ -3532,7 +3618,7 @@ class SmartGitViewProvider {
         document.getElementById('stagedText').textContent = msg.stagedCount + ' staged';
         document.getElementById('unstagedText').textContent = msg.unstagedCount + ' modified';
 
-        if (msg.commitText !== undefined && msg.commitText !== textarea.value) {
+        if (msg.commitText !== undefined && msg.commitText !== textarea.value && document.activeElement !== textarea) {
           textarea.value = msg.commitText;
           updateChars();
         }
