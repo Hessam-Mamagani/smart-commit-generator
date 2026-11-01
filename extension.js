@@ -902,6 +902,49 @@ async function applyVersionBump(pkgInfo, newVersion, cwd) {
         }
       }
     } catch (e) {}
+    // Automatically update CHANGELOG.md with recent commits
+    try {
+      const changelogPath = path.join(cwd, "CHANGELOG.md");
+      if (fs.existsSync(changelogPath)) {
+        let changelog = fs.readFileSync(changelogPath, "utf8");
+        const today = new Date().toISOString().split("T")[0];
+
+        let commitLines = [];
+        try {
+          const logRaw = await runGit(
+            ["log", "-n", "8", "--pretty=format:%s"],
+            cwd,
+          );
+          commitLines = logRaw
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(
+              (s) =>
+                s &&
+                !s.startsWith("chore(release):") &&
+                !s.startsWith("Merge "),
+            );
+        } catch (e) {}
+
+        const bulletPoints =
+          commitLines.length > 0
+            ? commitLines.map((s) => `- ${s}`).join("\n")
+            : "- Performance enhancements and minor bug fixes.";
+
+        const newEntry = `## [${newVersion}] - ${today}\n\n### Added & Improved\n${bulletPoints}\n\n---\n\n`;
+
+        const firstVersionIndex = changelog.search(/##\s+\[/);
+        if (firstVersionIndex !== -1) {
+          changelog =
+            changelog.slice(0, firstVersionIndex) +
+            newEntry +
+            changelog.slice(firstVersionIndex);
+          fs.writeFileSync(changelogPath, changelog, "utf8");
+          await runGit(["add", "CHANGELOG.md"], cwd);
+        }
+      }
+    } catch (e) {}
+
     await runGit(["add", "package.json"], cwd);
     await runGit(
       ["commit", "-m", `chore(release): bump version to ${newVersion}`],

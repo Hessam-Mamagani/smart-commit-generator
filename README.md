@@ -1,6 +1,6 @@
 # Smart Commit Generator AI
 
-[![Version](https://img.shields.io/vscode-marketplace/v/Hessam-Mamagani.smart-commit-generator-ai?style=flat-square&color=blue&label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=Hessam-Mamagani.smart-commit-generator-ai)
+[![VS Marketplace](https://vsmarketplacebadges.dev/version/Hessam-Mamagani.smart-commit-generator-ai.svg?style=flat-square&color=blue&label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=Hessam-Mamagani.smart-commit-generator-ai)
 [![Open VSX](https://img.shields.io/open-vsx/v/Hessam-Mamagani/smart-commit-generator-ai?style=flat-square&color=purple&label=Open%20VSX)](https://open-vsx.org/extension/Hessam-Mamagani/smart-commit-generator-ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE.txt)
 

@@ -2,9 +2,31 @@
 
 All notable changes to the "Smart Commit Generator AI" extension will be documented in this file.
 
-# Change Log
+## [1.4.5] - 2026-11-01
 
-All notable changes to the "Smart Commit Generator AI" extension will be documented in this file.
+### Added & Improved
+- **Outgoing Commits Tracker (GitHub Desktop-style)**: Added a dedicated, collapsible **OUTGOING COMMITS** card directly above Changes showing all local commits waiting to be pushed, with commit hashes, messages, relative timestamps, and active count badge.
+- **One-Click Push for Pending Commits**: Dedicated `⬆ Push` header button and clickable `↑ N to push` status bar pill to push outgoing commits directly to the remote repository. Automatically configures upstream tracking if missing.
+- **Undo Last Commit (`↶ Undo`)**: Inline soft reset (`git reset --soft HEAD~1`) action on the latest pending commit. Safely uncommits changes back into the Staged area and restores the commit message into the text editor so you can edit it or regenerate with AI.
+- **One-Click Local Commit (`[ 1 + 2 ]`)**: Clicking **Commit Only** with an empty message now automatically stages files and generates the commit message using AI before committing locally without pushing.
+- **High-Contrast Slate Navy Styling**: Upgraded the **Commit Only** button to a refined Slate Navy design (`#252b37` with crisp border and high-contrast text), eliminating the inactive washed-out grey appearance.
+
+---
+
+## [1.4.4] - 2026-11-01
+
+### Added & Improved
+- **Real-Time Git State Synchronization**: Subscribed to VS Code Git extension repository events (`repo.state.onDidChange`, `onDidOpenRepository`) to automatically reflect branch, staging, and commit changes across all views with debounced refresh.
+- **Document Save Change Detection**: Automatically updates the uncommitted changes list whenever files are saved.
+
+---
+
+## [1.4.3] - 2026-11-01
+
+### Added & Improved
+- **Enhanced Branch Switching**: Interactive checkout with branch sorting by recent committer date and dedicated "Create new branch..." prompt.
+
+---
 
 ## [1.4.2] - 2026-11-01
 
