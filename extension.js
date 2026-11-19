@@ -2590,6 +2590,29 @@ Write a comprehensive branch comparison and architecture report:`;
   let lastBadgeRepoName = "";
   let actionsViewProvider = null;
 
+  function clearViewBadge(view, deferUndefined = false) {
+    if (!view) return;
+    try {
+      if (view.badge === undefined) return;
+      // Workaround for VS Code < 1.116 / forks (missing microsoft/vscode#331019):
+      // WebviewViewPane.updateBadge(undefined) fails to clear its activity, leaving the old count stuck.
+      // Setting value: 0 immediately replaces and hides the NumberBadge in compositeBarActions,
+      // then setting undefined clears the activity cleanly on newer VS Code builds.
+      view.badge = { value: 0, tooltip: "" };
+      if (deferUndefined) {
+        setTimeout(() => {
+          if (lastBadgeCount === 0 && view === actionsViewProvider?._view) {
+            try {
+              view.badge = undefined;
+            } catch (e) {}
+          }
+        }, 50);
+      } else {
+        view.badge = undefined;
+      }
+    } catch (e) {}
+  }
+
   function applyActivityBarBadge(count, repoName = "") {
     const safeCount =
       Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
@@ -2608,12 +2631,22 @@ Write a comprehensive branch comparison and architecture report:`;
 
     if (actionsViewProvider && actionsViewProvider._view) {
       // Once the Activity Bar webview is resolved, it owns the badge alone (prevents double-counting)
-      if (badgeTreeView) {
-        badgeTreeView.badge = undefined;
+      clearViewBadge(badgeTreeView, false);
+      if (badge) {
+        try {
+          actionsViewProvider._view.badge = badge;
+        } catch (e) {}
+      } else {
+        clearViewBadge(actionsViewProvider._view, true);
       }
-      actionsViewProvider._view.badge = badge;
     } else if (badgeTreeView) {
-      badgeTreeView.badge = badge;
+      if (badge) {
+        try {
+          badgeTreeView.badge = badge;
+        } catch (e) {}
+      } else {
+        clearViewBadge(badgeTreeView, false);
+      }
     }
   }
 

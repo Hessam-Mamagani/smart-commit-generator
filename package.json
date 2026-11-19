@@ -2,7 +2,7 @@
   "name": "smart-commit-generator-ai",
   "displayName": "Smart Commit Generator AI",
   "description": "AI Git commit message generator, 1-click push, PR generator & safe branch sync. Supports Built-in IDE AI (Copilot), Free Gemini, Groq, Claude, OpenAI, OpenRouter, DeepSeek, Grok, Ollama & custom endpoints.",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "publisher": "Hessam-Mamagani",
   "author": {
     "name": "Hessam Barasm Mamagani",

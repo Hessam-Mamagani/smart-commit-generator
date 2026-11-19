@@ -2,6 +2,13 @@
 
 All notable changes to the "Smart Commit Generator AI" extension will be documented in this file.
 
+## [1.5.1] - 2026-11-19
+
+### Fixed
+- **Activity Bar Badge Clearing**: Fixed the Activity Bar changes counter badge staying visible after discarding or committing all changes on VS Code < 1.116 and VS Code forks (Antigravity IDE, Cursor, Windsurf) affected by upstream `WebviewViewPane.updateBadge(undefined)` not clearing its activity. Now explicitly resets the badge count to `0` before clearing to `undefined` so the badge disappears immediately across all IDE versions.
+
+---
+
 ## [1.5.0] - 2026-11-19
 
 ### Added
