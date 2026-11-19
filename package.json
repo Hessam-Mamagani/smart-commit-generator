@@ -1,8 +1,8 @@
 {
   "name": "smart-commit-generator-ai",
   "displayName": "Smart Commit Generator AI",
-  "description": "AI Git commit message generator, 1-click push, PR generator & safe branch sync. Supports OpenAI, Free Gemini, DeepSeek, Groq, Grok & local Ollama.",
-  "version": "1.4.7",
+  "description": "AI Git commit message generator, 1-click push, PR generator & safe branch sync. Supports Built-in IDE AI (Copilot), Free Gemini, Groq, Claude, OpenAI, OpenRouter, DeepSeek, Grok, Ollama & custom endpoints.",
+  "version": "1.5.0",
   "publisher": "Hessam-Mamagani",
   "author": {
     "name": "Hessam Barasm Mamagani",
@@ -24,6 +24,9 @@
     "ai commit",
     "commit message generator",
     "conventional commits",
+    "claude",
+    "anthropic",
+    "openrouter",
     "deepseek",
     "gemini",
     "groq",
@@ -36,7 +39,7 @@
     "git push",
     "branch sync",
     "merge conflicts",
-    "copilot alternative",
+    "copilot",
     "cursor",
     "scm",
     "productivity",
@@ -52,7 +55,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
+    "workspaceContains:.git",
     "onView:workbench.scm",
     "onView:smartCommit.actionsView",
     "onView:smartCommit.actionsViewScm"
@@ -74,6 +77,11 @@
           "id": "smartCommit.actionsView",
           "name": "Smart Commit Generator AI",
           "type": "webview"
+        },
+        {
+          "id": "smartCommit.badgeView",
+          "name": "Smart Commit Changes Counter",
+          "when": "false"
         }
       ],
       "scm": [
@@ -89,6 +97,11 @@
         "command": "smartCommit.selectProvider",
         "title": "Smart Git: Select Active AI Provider",
         "icon": "$(gear)"
+      },
+      {
+        "command": "smartCommit.manageApiKeys",
+        "title": "Smart Git: Manage API Keys (Secure Storage)",
+        "icon": "$(key)"
       },
       {
         "command": "smartCommit.selectRepository",
@@ -270,50 +283,88 @@
         "smartCommit.provider": {
           "type": "string",
           "enum": [
-            "openai",
             "gemini",
-            "deepseek",
+            "vscode-lm",
             "groq",
+            "ollama",
+            "claude",
+            "openai",
+            "openrouter",
+            "deepseek",
             "grok",
-            "ollama"
+            "custom"
           ],
-          "default": "openai",
-          "description": "Provider to use: 'openai', 'gemini' (Free tier), 'deepseek', 'groq' (Free tier), 'grok' (xAI), or 'ollama' (local offline)."
+          "enumDescriptions": [
+            "Google Gemini (Free tier via Google AI Studio, default: gemini-3.8-flash)",
+            "Built-in IDE AI / GitHub Copilot (Zero API key required, VS Code 1.90+)",
+            "Groq (Free tier, ultra-fast LPU inference)",
+            "Local Ollama (100% free & offline, zero API key)",
+            "Anthropic Claude (default: claude-haiku-5-5)",
+            "OpenAI (default: gpt-4o-mini)",
+            "OpenRouter (200+ models via one key, default: openai/gpt-4o-mini)",
+            "DeepSeek (default: deepseek-chat)",
+            "xAI Grok (default: grok-4.20-0309-non-reasoning)",
+            "Custom OpenAI-Compatible Endpoint (LM Studio, Azure, vLLM, LiteLLM)"
+          ],
+          "default": "gemini",
+          "description": "Active AI provider for commit messages, PR descriptions, and branch analysis."
         },
-        "smartCommit.openaiApiKey": {
+        "smartCommit.model": {
           "type": "string",
           "default": "",
-          "description": "OpenAI API Key."
-        },
-        "smartCommit.geminiApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "Google Gemini API Key (100% free at Google AI Studio)."
-        },
-        "smartCommit.deepseekApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "DeepSeek API Key (from platform.deepseek.com)."
-        },
-        "smartCommit.groqApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "Groq API Key (free from console.groq.com)."
-        },
-        "smartCommit.grokApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "xAI Grok API Key (from console.x.ai)."
+          "description": "Optional model override (leave blank to use provider defaults: gemini-3.8-flash, llama-3.3-70b-versatile, llama3.2, claude-haiku-5-5, gpt-4o-mini, openai/gpt-4o-mini, deepseek-chat, or grok-4.20-0309-non-reasoning)."
         },
         "smartCommit.ollamaEndpoint": {
           "type": "string",
           "default": "http://localhost:11434",
           "description": "Local Ollama server endpoint (default: http://localhost:11434)."
         },
-        "smartCommit.model": {
+        "smartCommit.customBaseUrl": {
           "type": "string",
           "default": "",
-          "description": "Model override (leave blank to use provider defaults: gpt-4o-mini, gemini-3.8-flash, deepseek-chat, llama-3.3-70b-versatile, or llama3.2)."
+          "description": "Base URL for Custom OpenAI-compatible provider (e.g., http://localhost:1234/v1 or full chat completions endpoint)."
+        },
+        "smartCommit.commitLanguage": {
+          "type": "string",
+          "default": "English",
+          "description": "Language for generated commit descriptions and PR summaries (Conventional Commit prefixes like feat/fix remain in English)."
+        },
+        "smartCommit.useGitmoji": {
+          "type": "boolean",
+          "default": false,
+          "description": "Prefix generated commit headers with an appropriate Gitmoji matching the commit type."
+        },
+        "smartCommit.customPrompt": {
+          "type": "string",
+          "default": "",
+          "description": "Optional extra instructions appended to the commit generation system prompt (e.g., team naming conventions or style rules)."
+        },
+        "smartCommit.excludeFromDiff": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "package-lock.json",
+            "yarn.lock",
+            "pnpm-lock.yaml",
+            "bun.lockb",
+            "bun.lock",
+            "Cargo.lock",
+            "composer.lock",
+            "Gemfile.lock",
+            "poetry.lock",
+            "Pipfile.lock",
+            "go.sum",
+            "*.min.js",
+            "*.min.css",
+            "*.map",
+            "*.snap",
+            "dist/**",
+            "build/**",
+            ".next/**"
+          ],
+          "description": "Glob patterns excluded from raw diffs sent to AI so lockfiles and build artifacts never truncate real code changes."
         },
         "smartCommit.autoStage": {
           "type": "boolean",
@@ -334,6 +385,36 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically calculate and bump semver in package.json when syncing to release/publish branches."
+        },
+        "smartCommit.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "deprecationMessage": "Deprecated for security. Run 'Smart Git: Manage API Keys (Secure Storage)' instead. Keys entered here are automatically migrated to VS Code encrypted Secret Storage and cleared.",
+          "description": "Legacy plaintext OpenAI API Key (automatically migrated to encrypted Secret Storage)."
+        },
+        "smartCommit.geminiApiKey": {
+          "type": "string",
+          "default": "",
+          "deprecationMessage": "Deprecated for security. Run 'Smart Git: Manage API Keys (Secure Storage)' instead. Keys entered here are automatically migrated to VS Code encrypted Secret Storage and cleared.",
+          "description": "Legacy plaintext Google Gemini API Key (automatically migrated to encrypted Secret Storage)."
+        },
+        "smartCommit.deepseekApiKey": {
+          "type": "string",
+          "default": "",
+          "deprecationMessage": "Deprecated for security. Run 'Smart Git: Manage API Keys (Secure Storage)' instead. Keys entered here are automatically migrated to VS Code encrypted Secret Storage and cleared.",
+          "description": "Legacy plaintext DeepSeek API Key (automatically migrated to encrypted Secret Storage)."
+        },
+        "smartCommit.groqApiKey": {
+          "type": "string",
+          "default": "",
+          "deprecationMessage": "Deprecated for security. Run 'Smart Git: Manage API Keys (Secure Storage)' instead. Keys entered here are automatically migrated to VS Code encrypted Secret Storage and cleared.",
+          "description": "Legacy plaintext Groq API Key (automatically migrated to encrypted Secret Storage)."
+        },
+        "smartCommit.grokApiKey": {
+          "type": "string",
+          "default": "",
+          "deprecationMessage": "Deprecated for security. Run 'Smart Git: Manage API Keys (Secure Storage)' instead. Keys entered here are automatically migrated to VS Code encrypted Secret Storage and cleared.",
+          "description": "Legacy plaintext xAI Grok API Key (automatically migrated to encrypted Secret Storage)."
         }
       }
     }

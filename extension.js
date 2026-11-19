@@ -4,6 +4,95 @@ const https = require("https");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
+
+const DEFAULT_DIFF_EXCLUDES = [
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+  "bun.lockb",
+  "bun.lock",
+  "Cargo.lock",
+  "composer.lock",
+  "Gemfile.lock",
+  "poetry.lock",
+  "Pipfile.lock",
+  "go.sum",
+  "*.min.js",
+  "*.min.css",
+  "*.map",
+  "*.snap",
+  "dist/**",
+  "build/**",
+  ".next/**",
+];
+
+const SECRET_PROVIDERS = {
+  gemini: {
+    label: "Google Gemini",
+    legacySetting: "geminiApiKey",
+    secretKey: "smartCommit.apiKey.gemini",
+    keyUrl: "https://aistudio.google.com/app/apikey",
+    isFreeTier: true,
+    optionalKey: false,
+  },
+  groq: {
+    label: "Groq",
+    legacySetting: "groqApiKey",
+    secretKey: "smartCommit.apiKey.groq",
+    keyUrl: "https://console.groq.com/keys",
+    isFreeTier: true,
+    optionalKey: false,
+  },
+  claude: {
+    label: "Anthropic Claude",
+    legacySetting: null,
+    secretKey: "smartCommit.apiKey.claude",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+    isFreeTier: false,
+    optionalKey: false,
+  },
+  openai: {
+    label: "OpenAI",
+    legacySetting: "openaiApiKey",
+    secretKey: "smartCommit.apiKey.openai",
+    keyUrl: "https://platform.openai.com/api-keys",
+    isFreeTier: false,
+    optionalKey: false,
+  },
+  openrouter: {
+    label: "OpenRouter",
+    legacySetting: null,
+    secretKey: "smartCommit.apiKey.openrouter",
+    keyUrl: "https://openrouter.ai/keys",
+    isFreeTier: false,
+    optionalKey: false,
+  },
+  deepseek: {
+    label: "DeepSeek",
+    legacySetting: "deepseekApiKey",
+    secretKey: "smartCommit.apiKey.deepseek",
+    keyUrl: "https://platform.deepseek.com/api_keys",
+    isFreeTier: false,
+    optionalKey: false,
+  },
+  grok: {
+    label: "Grok (xAI)",
+    legacySetting: "grokApiKey",
+    secretKey: "smartCommit.apiKey.grok",
+    keyUrl: "https://console.x.ai",
+    isFreeTier: false,
+    optionalKey: false,
+  },
+  custom: {
+    label: "Custom OpenAI-Compatible",
+    legacySetting: null,
+    secretKey: "smartCommit.apiKey.custom",
+    keyUrl: "",
+    isFreeTier: false,
+    optionalKey: true,
+  },
+};
 
 const SYSTEM_PROMPT = `You are an expert Git commit message generator following the Conventional Commits specification.
 Generate a concise, accurate, and meaningful commit message based strictly on the provided git diff.
@@ -84,53 +173,41 @@ High-level summary of the development scope, goals, and differences between thes
 Output strictly formatted GitHub Markdown.`;
 
 let globalNotifyAllViews = null;
+let extensionSecrets = null;
+let isMigratingLegacyKeys = false;
 
 function getSetting(key) {
   const config = vscode.workspace.getConfiguration("smartCommit");
-  let val = config.get(key);
-  if (val !== undefined && val !== null && val !== "") return val;
-
-  const globalConfig = vscode.workspace.getConfiguration();
-  val = globalConfig.get(`smartCommit.${key}`);
-  if (val !== undefined && val !== null && val !== "") return val;
-
-  // Fail-safe direct read from local settings.json
-  try {
-    const candidates = [
-      path.join(
-        process.env.APPDATA || "",
-        "Antigravity IDE",
-        "User",
-        "settings.json",
-      ),
-      path.join(
-        process.env.APPDATA || "",
-        "Antigravity",
-        "User",
-        "settings.json",
-      ),
-      path.join(process.env.APPDATA || "", "Code", "User", "settings.json"),
-    ];
-    for (const p of candidates) {
-      if (fs.existsSync(p)) {
-        const raw = fs.readFileSync(p, "utf8");
-        const reg = new RegExp(
-          `"smartCommit\\.${key}"\\s*:\\s*(true|false|"[^"]+"|[0-9]+)`,
-        );
-        const m = raw.match(reg);
-        if (m && m[1]) {
-          let parsed = m[1];
-          if (parsed === "true") return true;
-          if (parsed === "false") return false;
-          if (parsed.startsWith('"') && parsed.endsWith('"'))
-            return parsed.slice(1, -1);
-          return parsed;
-        }
-      }
-    }
-  } catch (e) {}
-
+  const val = config.get(key);
+  if (val !== undefined && val !== null) return val;
   return "";
+}
+
+function buildCommitSystemPrompt() {
+  let prompt = SYSTEM_PROMPT;
+  const language = String(getSetting("commitLanguage") || "English").trim();
+  const useGitmoji = Boolean(getSetting("useGitmoji"));
+  const customPrompt = String(getSetting("customPrompt") || "").trim();
+
+  if (language && language.toLowerCase() !== "english") {
+    prompt += `\n5. Write the commit summary and bullet descriptions in ${language}. Keep the Conventional Commit type prefix (e.g., feat, fix, refactor, chore) in English.`;
+  }
+  if (useGitmoji) {
+    prompt += `\n6. Prefix the commit header with the single most appropriate Gitmoji Unicode symbol for the commit type (e.g., sparkles for feat, bug for fix, wrench for chore, memo for docs, recycle for refactor, zap for perf).`;
+  }
+  if (customPrompt) {
+    prompt += `\n\nAdditional user instructions:\n${customPrompt}`;
+  }
+  return prompt;
+}
+
+function buildPrSystemPrompt() {
+  let prompt = PR_SYSTEM_PROMPT;
+  const language = String(getSetting("commitLanguage") || "English").trim();
+  if (language && language.toLowerCase() !== "english") {
+    prompt += `\n\nWrite the PR summary, key changes, and verification sections in ${language}.`;
+  }
+  return prompt;
 }
 
 function runGit(args, cwd) {
@@ -149,12 +226,43 @@ function runGit(args, cwd) {
   });
 }
 
+function getDiffExcludeArgs() {
+  const configured = getSetting("excludeFromDiff");
+  const patterns = Array.isArray(configured) ? configured : DEFAULT_DIFF_EXCLUDES;
+  const specs = new Set();
+
+  for (const raw of patterns) {
+    if (typeof raw !== "string") continue;
+    const p = raw.trim();
+    if (!p) continue;
+    specs.add(`:(glob,exclude)${p}`);
+    if (!p.startsWith("**/")) {
+      specs.add(`:(glob,exclude)**/${p}`);
+    }
+  }
+
+  return specs.size > 0 ? ["--", ".", ...Array.from(specs)] : [];
+}
+
+async function runGitDiffFiltered(baseArgs, cwd) {
+  const excludeArgs = getDiffExcludeArgs();
+  if (excludeArgs.length === 0) {
+    return await runGit(baseArgs, cwd);
+  }
+  try {
+    return await runGit([...baseArgs, ...excludeArgs], cwd);
+  } catch (e) {
+    // Fallback for older Git binaries that may reject glob pathspec magic
+    return await runGit(baseArgs, cwd);
+  }
+}
+
 let currentTargetRepoUri = null;
 
 function getTargetRepository(arg) {
   const gitExtension = vscode.extensions.getExtension("vscode.git");
-  if (!gitExtension) return null;
-  const api = gitExtension.exports.getAPI(1);
+  if (!gitExtension || !gitExtension.isActive) return null;
+  const api = gitExtension.exports?.getAPI?.(1);
   if (!api || !api.repositories || api.repositories.length === 0) return null;
 
   // 1. Explicit argument from command or caller
@@ -229,6 +337,14 @@ function cleanCommitMessage(msg) {
   return cleaned;
 }
 
+function normalizeCustomChatUrl(rawUrl) {
+  const trimmed = String(rawUrl || "").trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  if (trimmed.includes("/chat/completions")) return trimmed;
+  if (trimmed.endsWith("/v1")) return `${trimmed}/chat/completions`;
+  return `${trimmed}/v1/chat/completions`;
+}
+
 function requestOpenAICompatible({
   baseUrl,
   apiKey,
@@ -237,9 +353,16 @@ function requestOpenAICompatible({
   systemPrompt = SYSTEM_PROMPT,
   maxTokens = 600,
   providerName = "AI",
+  extraHeaders = {},
+  timeoutMs = 45000,
 }) {
   return new Promise((resolve, reject) => {
-    const urlObj = new URL(baseUrl);
+    let urlObj;
+    try {
+      urlObj = new URL(baseUrl);
+    } catch (e) {
+      return reject(new Error(`${providerName}: Invalid endpoint URL "${baseUrl}".`));
+    }
     const isHttps = urlObj.protocol === "https:";
     const httpLib = isHttps ? https : http;
 
@@ -255,6 +378,7 @@ function requestOpenAICompatible({
 
     const headers = {
       "Content-Type": "application/json",
+      ...extraHeaders,
     };
     if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`;
@@ -282,12 +406,27 @@ function requestOpenAICompatible({
         }
         try {
           const json = JSON.parse(body);
-          const text = json.choices?.[0]?.message?.content?.trim();
+          const content = json.choices?.[0]?.message?.content;
+          const text = typeof content === "string" ? content.trim() : "";
+          if (!text) {
+            const reason = json.choices?.[0]?.finish_reason || "unknown";
+            return reject(
+              new Error(
+                `${providerName} returned an empty response (finish_reason: ${reason}).`,
+              ),
+            );
+          }
           resolve(cleanCommitMessage(text));
         } catch (e) {
-          reject(e);
+          reject(new Error(`${providerName}: Failed to parse JSON response: ${e.message}`));
         }
       });
+    });
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(
+        new Error(`${providerName} request timed out after ${Math.round(timeoutMs / 1000)}s.`),
+      );
     });
 
     req.on("error", (err) => {
@@ -309,6 +448,136 @@ function requestOpenAICompatible({
   });
 }
 
+function requestClaude(
+  apiKey,
+  model,
+  userContent,
+  systemPrompt = SYSTEM_PROMPT,
+  maxTokens = 800,
+  timeoutMs = 45000,
+) {
+  return new Promise((resolve, reject) => {
+    const modelName = model || "claude-haiku-5-5";
+    const payload = JSON.stringify({
+      model: modelName,
+      max_tokens: Math.max(maxTokens, 800),
+      temperature: 0.2,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userContent }],
+    });
+
+    const req = https.request(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            return reject(
+              new Error(`Claude API error (${res.statusCode}): ${body.slice(0, 300)}`),
+            );
+          }
+          try {
+            const json = JSON.parse(body);
+            const blocks = Array.isArray(json.content) ? json.content : [];
+            const text = blocks
+              .filter((b) => b.type === "text" && typeof b.text === "string")
+              .map((b) => b.text)
+              .join("")
+              .trim();
+            if (!text) {
+              return reject(
+                new Error(
+                  `Claude returned an empty response (stop_reason: ${json.stop_reason || "unknown"}).`,
+                ),
+              );
+            }
+            resolve(cleanCommitMessage(text));
+          } catch (e) {
+            reject(new Error(`Claude: Failed to parse JSON response: ${e.message}`));
+          }
+        });
+      },
+    );
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`Claude request timed out after ${Math.round(timeoutMs / 1000)}s.`));
+    });
+
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+async function hasBuiltInVsCodeLm() {
+  try {
+    if (!vscode.lm || typeof vscode.lm.selectChatModels !== "function") {
+      return false;
+    }
+    const models = await vscode.lm.selectChatModels({});
+    return Array.isArray(models) && models.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function requestVsCodeLm(modelOverride, userContent, systemPrompt = SYSTEM_PROMPT) {
+  if (!vscode.lm || typeof vscode.lm.selectChatModels !== "function") {
+    throw new Error(
+      "Built-in IDE AI requires VS Code 1.90+ with an active language model extension (e.g., GitHub Copilot).",
+    );
+  }
+
+  const models = await vscode.lm.selectChatModels({});
+  if (!models || models.length === 0) {
+    throw new Error(
+      "No built-in IDE AI model found. Sign in to GitHub Copilot or switch provider (e.g., Gemini, Groq, or Ollama).",
+    );
+  }
+
+  let selected = null;
+  if (modelOverride) {
+    const target = modelOverride.toLowerCase();
+    selected = models.find((m) =>
+      `${m.id} ${m.family} ${m.name}`.toLowerCase().includes(target),
+    );
+  }
+  if (!selected) {
+    selected =
+      models.find((m) =>
+        /mini|flash|haiku|small|4o-mini/i.test(`${m.id} ${m.family} ${m.name}`),
+      ) || models[0];
+  }
+
+  const messages = [
+    vscode.LanguageModelChatMessage.User(`${systemPrompt}\n\n${userContent}`),
+  ];
+  const cts = new vscode.CancellationTokenSource();
+  try {
+    const response = await selected.sendRequest(messages, {}, cts.token);
+    let result = "";
+    for await (const chunk of response.text) {
+      result += chunk;
+    }
+    const cleaned = cleanCommitMessage(result);
+    if (!cleaned) {
+      throw new Error("Built-in IDE AI returned an empty response.");
+    }
+    return cleaned;
+  } finally {
+    cts.dispose();
+  }
+}
+
 function requestOpenAI(
   apiKey,
   model,
@@ -327,6 +596,126 @@ function requestOpenAI(
   });
 }
 
+function sendGeminiRequest(
+  apiKey,
+  modelName,
+  userContent,
+  systemPrompt,
+  generationConfig,
+  timeoutMs = 45000,
+) {
+  return new Promise((resolve, reject) => {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const payload = JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: systemPrompt }],
+      },
+      contents: [{ parts: [{ text: userContent }] }],
+      generationConfig,
+    });
+
+    const req = https.request(
+      url,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => {
+          if (res.statusCode !== 200) {
+            const err = new Error(
+              `Gemini API error (${res.statusCode}): ${body.slice(0, 300)}`,
+            );
+            err.statusCode = res.statusCode;
+            return reject(err);
+          }
+          try {
+            const json = JSON.parse(body);
+            const candidate = json.candidates?.[0];
+            const parts = candidate?.content?.parts || [];
+            // Exclude reasoning/thought blocks so only the final response is returned
+            const text = parts
+              .filter((p) => !p.thought && typeof p.text === "string")
+              .map((p) => p.text)
+              .join("")
+              .trim();
+            if (!text) {
+              const reason = candidate?.finishReason || "unknown";
+              return reject(
+                new Error(
+                  `Gemini returned an empty response (finishReason: ${reason}).`,
+                ),
+              );
+            }
+            resolve(cleanCommitMessage(text));
+          } catch (e) {
+            reject(new Error(`Gemini: Failed to parse JSON response: ${e.message}`));
+          }
+        });
+      },
+    );
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`Gemini request timed out after ${Math.round(timeoutMs / 1000)}s.`));
+    });
+
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+async function requestGemini(
+  apiKey,
+  model,
+  userContent,
+  systemPrompt = SYSTEM_PROMPT,
+  maxTokens = 600,
+) {
+  const modelName = model || "gemini-3.8-flash";
+  // Give generous output headroom so reasoning/thinking tokens never starve the visible answer
+  const effectiveMaxTokens = Math.max(maxTokens * 3, 2048);
+  const generationConfig = {
+    temperature: 0.2,
+    maxOutputTokens: effectiveMaxTokens,
+  };
+
+  const usesGemini3Thinking = /^gemini-[3-9]/i.test(modelName);
+  if (usesGemini3Thinking) {
+    generationConfig.thinkingConfig = {
+      thinkingLevel: maxTokens <= 800 ? "minimal" : "low",
+    };
+  }
+
+  try {
+    return await sendGeminiRequest(
+      apiKey,
+      modelName,
+      userContent,
+      systemPrompt,
+      generationConfig,
+    );
+  } catch (err) {
+    // If a custom/older Gemini model rejects thinkingConfig, retry cleanly without it
+    if (usesGemini3Thinking && err.statusCode === 400) {
+      const fallbackConfig = {
+        temperature: 0.2,
+        maxOutputTokens: effectiveMaxTokens,
+      };
+      return await sendGeminiRequest(
+        apiKey,
+        modelName,
+        userContent,
+        systemPrompt,
+        fallbackConfig,
+      );
+    }
+    throw err;
+  }
+}
+
 async function executeAiCompletion(
   provider,
   apiKey,
@@ -335,8 +724,20 @@ async function executeAiCompletion(
   systemPrompt = SYSTEM_PROMPT,
   maxTokens = 600,
 ) {
+  if (provider === "vscode-lm") {
+    return await requestVsCodeLm(modelOverride, userContent, systemPrompt);
+  }
   if (provider === "gemini") {
     return await requestGemini(
+      apiKey,
+      modelOverride,
+      userContent,
+      systemPrompt,
+      maxTokens,
+    );
+  }
+  if (provider === "claude") {
+    return await requestClaude(
       apiKey,
       modelOverride,
       userContent,
@@ -370,11 +771,26 @@ async function executeAiCompletion(
     return await requestOpenAICompatible({
       baseUrl: "https://api.x.ai/v1/chat/completions",
       apiKey,
-      model: modelOverride || "grok-2-latest",
+      model: modelOverride || "grok-4.20-0309-non-reasoning",
       userContent,
       systemPrompt,
       maxTokens,
       providerName: "Grok",
+    });
+  }
+  if (provider === "openrouter") {
+    return await requestOpenAICompatible({
+      baseUrl: "https://openrouter.ai/api/v1/chat/completions",
+      apiKey,
+      model: modelOverride || "openai/gpt-4o-mini",
+      userContent,
+      systemPrompt,
+      maxTokens,
+      providerName: "OpenRouter",
+      extraHeaders: {
+        "HTTP-Referer": "https://github.com/Hessam-Mamagani/smart-commit-generator",
+        "X-Title": "Smart Commit Generator AI",
+      },
     });
   }
   if (provider === "ollama") {
@@ -390,6 +806,24 @@ async function executeAiCompletion(
       providerName: "Ollama",
     });
   }
+  if (provider === "custom") {
+    const rawEndpoint = getSetting("customBaseUrl");
+    const baseUrl = normalizeCustomChatUrl(rawEndpoint);
+    if (!baseUrl) {
+      throw new Error(
+        "Custom provider requires `smartCommit.customBaseUrl` to be configured.",
+      );
+    }
+    return await requestOpenAICompatible({
+      baseUrl,
+      apiKey: apiKey === "custom-no-key" ? "" : apiKey,
+      model: modelOverride || "gpt-4o-mini",
+      userContent,
+      systemPrompt,
+      maxTokens,
+      providerName: "Custom AI",
+    });
+  }
   return await requestOpenAI(
     apiKey,
     modelOverride,
@@ -399,187 +833,216 @@ async function executeAiCompletion(
   );
 }
 
-function requestGemini(
-  apiKey,
-  model,
-  userContent,
-  systemPrompt = SYSTEM_PROMPT,
-  maxTokens = 600,
-) {
-  return new Promise((resolve, reject) => {
-    const modelName = model || "gemini-3.8-flash";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-    const payload = JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: systemPrompt }],
-      },
-      contents: [{ parts: [{ text: userContent }] }],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: maxTokens,
-      },
-    });
+async function migrateLegacyApiKey(provider) {
+  const meta = SECRET_PROVIDERS[provider];
+  if (!meta || !meta.legacySetting || !extensionSecrets) return null;
 
-    const req = https.request(
-      url,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      },
-      (res) => {
-        let body = "";
-        res.on("data", (chunk) => (body += chunk));
-        res.on("end", () => {
-          if (res.statusCode !== 200) {
-            return reject(
-              new Error(`Gemini API error (${res.statusCode}): ${body}`),
-            );
-          }
-          try {
-            const json = JSON.parse(body);
-            const text =
-              json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-            resolve(cleanCommitMessage(text));
-          } catch (e) {
-            reject(e);
-          }
-        });
-      },
-    );
+  const config = vscode.workspace.getConfiguration("smartCommit");
+  const inspected = config.inspect(meta.legacySetting);
+  const legacyKey = (
+    inspected?.workspaceFolderValue ||
+    inspected?.workspaceValue ||
+    inspected?.globalValue ||
+    ""
+  ).trim();
 
-    req.on("error", reject);
-    req.write(payload);
-    req.end();
-  });
+  if (!legacyKey) return null;
+
+  await extensionSecrets.store(meta.secretKey, legacyKey);
+
+  // Clear plaintext key from settings.json after storing it safely in SecretStorage
+  try {
+    if (inspected?.globalValue) {
+      await config.update(meta.legacySetting, undefined, vscode.ConfigurationTarget.Global);
+    }
+    if (inspected?.workspaceValue) {
+      await config.update(meta.legacySetting, undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  } catch (e) {}
+
+  return legacyKey;
 }
 
-async function resolveApiKey(provider) {
-  if (provider === "ollama") {
-    return "local-ollama";
+async function migrateAllLegacyApiKeys(silent = true) {
+  if (!extensionSecrets || isMigratingLegacyKeys) return;
+  isMigratingLegacyKeys = true;
+  const migrated = [];
+  try {
+    for (const [provider, meta] of Object.entries(SECRET_PROVIDERS)) {
+      if (!meta.legacySetting) continue;
+      const key = await migrateLegacyApiKey(provider);
+      if (key) migrated.push(meta.label);
+    }
+    if (!silent && migrated.length > 0) {
+      vscode.window.showInformationMessage(
+        `Smart Git: Migrated ${migrated.join(", ")} API key(s) from plaintext settings.json into VS Code encrypted Secret Storage.`,
+      );
+    }
+  } finally {
+    isMigratingLegacyKeys = false;
   }
+}
 
-  const openaiKey = getSetting("openaiApiKey");
-  const geminiKey = getSetting("geminiApiKey");
-  const deepseekKey = getSetting("deepseekApiKey");
-  const groqKey = getSetting("groqApiKey");
-  const grokKey = getSetting("grokApiKey");
+async function getStoredApiKey(provider) {
+  const meta = SECRET_PROVIDERS[provider];
+  if (!meta) return "";
+  if (extensionSecrets) {
+    const stored = (await extensionSecrets.get(meta.secretKey)) || "";
+    if (stored.trim()) return stored.trim();
+    const migrated = await migrateLegacyApiKey(provider);
+    if (migrated) return migrated;
+  }
+  if (meta.legacySetting) {
+    return String(getSetting(meta.legacySetting) || "").trim();
+  }
+  return "";
+}
 
-  let apiKey = "";
-  let providerLabel = "OpenAI";
-  let targetSetting = "openaiApiKey";
-
-  if (provider === "gemini") {
-    apiKey = geminiKey;
-    providerLabel = "Google Gemini";
-    targetSetting = "geminiApiKey";
-  } else if (provider === "deepseek") {
-    apiKey = deepseekKey;
-    providerLabel = "DeepSeek";
-    targetSetting = "deepseekApiKey";
-  } else if (provider === "groq") {
-    apiKey = groqKey;
-    providerLabel = "Groq";
-    targetSetting = "groqApiKey";
-  } else if (provider === "grok") {
-    apiKey = grokKey;
-    providerLabel = "Grok (xAI)";
-    targetSetting = "grokApiKey";
+async function storeApiKey(provider, apiKey) {
+  const meta = SECRET_PROVIDERS[provider];
+  if (!meta || !extensionSecrets) return;
+  const cleaned = String(apiKey || "").trim();
+  if (cleaned) {
+    await extensionSecrets.store(meta.secretKey, cleaned);
   } else {
-    apiKey = openaiKey;
-    providerLabel = "OpenAI";
-    targetSetting = "openaiApiKey";
+    await extensionSecrets.delete(meta.secretKey);
   }
+}
+
+async function resolveProviderContext() {
+  let provider = getSetting("provider") || "gemini";
+  const modelOverride = String(getSetting("model") || "").trim();
+
+  if (provider === "ollama") {
+    return { provider, apiKey: "local-ollama", modelOverride };
+  }
+
+  if (provider === "vscode-lm") {
+    return { provider, apiKey: "vscode-lm", modelOverride };
+  }
+
+  if (provider === "custom") {
+    let customUrl = String(getSetting("customBaseUrl") || "").trim();
+    if (!customUrl) {
+      const enteredUrl = await vscode.window.showInputBox({
+        title: "Smart Git: Custom OpenAI-Compatible Endpoint",
+        prompt: "Enter your endpoint base URL (e.g. http://localhost:1234/v1)",
+        ignoreFocusOut: true,
+      });
+      if (!enteredUrl || !enteredUrl.trim()) return null;
+      customUrl = enteredUrl.trim();
+      await vscode.workspace
+        .getConfiguration("smartCommit")
+        .update("customBaseUrl", customUrl, vscode.ConfigurationTarget.Global);
+    }
+    const storedCustomKey = await getStoredApiKey("custom");
+    return {
+      provider,
+      apiKey: storedCustomKey || "custom-no-key",
+      modelOverride,
+    };
+  }
+
+  const meta = SECRET_PROVIDERS[provider] || SECRET_PROVIDERS.openai;
+  let apiKey = await getStoredApiKey(provider);
 
   if (!apiKey) {
-    const providerKeyUrls = {
-      gemini: "https://aistudio.google.com/app/apikey",
-      groq: "https://console.groq.com/keys",
-      deepseek: "https://platform.deepseek.com/api_keys",
-      grok: "https://console.x.ai",
-      openai: "https://platform.openai.com/api-keys",
-    };
-
-    const isFreeTier = provider === "gemini" || provider === "groq";
-    const getKeyAction = isFreeTier ? "Get Free API Key" : "Get API Key";
+    const canUseBuiltInLm = await hasBuiltInVsCodeLm();
+    const getKeyAction = meta.isFreeTier ? "Get Free API Key" : "Get API Key";
+    const buttons = [];
+    if (canUseBuiltInLm) {
+      buttons.push("Use Built-in IDE AI (No Key)");
+    }
+    buttons.push("Enter API Key");
+    if (meta.keyUrl) {
+      buttons.push(getKeyAction);
+    }
+    buttons.push("Switch Provider");
 
     const choice = await vscode.window.showWarningMessage(
-      `Smart Commit: No API key configured for "${providerLabel}".`,
-      "Enter API Key",
-      getKeyAction,
-      "Open Settings",
+      `Smart Git: No API key configured for "${meta.label}". Keys are stored securely in VS Code encrypted Secret Storage.`,
+      ...buttons,
     );
 
-    if (choice === getKeyAction) {
-      const url = providerKeyUrls[provider] || "https://google.com";
-      await vscode.env.openExternal(vscode.Uri.parse(url));
+    if (choice === "Use Built-in IDE AI (No Key)") {
+      await vscode.workspace
+        .getConfiguration("smartCommit")
+        .update("provider", "vscode-lm", vscode.ConfigurationTarget.Global);
+      if (globalNotifyAllViews) globalNotifyAllViews();
+      return { provider: "vscode-lm", apiKey: "vscode-lm", modelOverride };
+    }
+
+    if (choice === getKeyAction && meta.keyUrl) {
+      await vscode.env.openExternal(vscode.Uri.parse(meta.keyUrl));
       const entered = await vscode.window.showInputBox({
-        prompt: `Paste your ${providerLabel} API Key here`,
+        title: `Smart Git: Save ${meta.label} API Key (Encrypted)`,
+        prompt: `Paste your ${meta.label} API Key (saved securely in VS Code Secret Storage)`,
         password: true,
         ignoreFocusOut: true,
       });
       if (entered && entered.trim()) {
         apiKey = entered.trim();
-        await vscode.workspace
-          .getConfiguration("smartCommit")
-          .update(targetSetting, apiKey, vscode.ConfigurationTarget.Global);
+        await storeApiKey(provider, apiKey);
         vscode.window.showInformationMessage(
-          `Smart Commit: ${providerLabel} API Key saved successfully!`,
+          `Smart Git: ${meta.label} API Key saved securely!`,
         );
-        return apiKey;
+        return { provider, apiKey, modelOverride };
       }
       return null;
     }
 
     if (choice === "Enter API Key") {
       const entered = await vscode.window.showInputBox({
-        prompt: `Paste your ${providerLabel} API Key`,
+        title: `Smart Git: Save ${meta.label} API Key (Encrypted)`,
+        prompt: `Paste your ${meta.label} API Key (saved securely in VS Code Secret Storage)`,
         password: true,
         ignoreFocusOut: true,
       });
-
       if (entered && entered.trim()) {
         apiKey = entered.trim();
-        await vscode.workspace
-          .getConfiguration("smartCommit")
-          .update(targetSetting, apiKey, vscode.ConfigurationTarget.Global);
+        await storeApiKey(provider, apiKey);
         vscode.window.showInformationMessage(
-          `Smart Commit: ${providerLabel} API Key saved successfully!`,
+          `Smart Git: ${meta.label} API Key saved securely!`,
         );
-      } else {
-        return null;
+        return { provider, apiKey, modelOverride };
       }
-    } else if (choice === "Open Settings") {
-      vscode.commands.executeCommand(
-        "workbench.action.openSettings",
-        "smartCommit",
-      );
-      return null;
-    } else {
       return null;
     }
+
+    if (choice === "Switch Provider") {
+      await vscode.commands.executeCommand("smartCommit.selectProvider");
+      return null;
+    }
+
+    return null;
   }
 
-  return apiKey;
+  return { provider, apiKey, modelOverride };
 }
 
 async function buildDiffContent(cwd, autoStage = false) {
-  let stagedDiff = await runGit(["diff", "--cached"], cwd);
-  let statSummary = "";
+  let stagedStat = await runGit(["diff", "--cached", "--stat"], cwd);
 
-  if (!stagedDiff.trim() && autoStage) {
+  if (!stagedStat.trim() && autoStage) {
     await runGit(["add", "-A"], cwd);
-    stagedDiff = await runGit(["diff", "--cached"], cwd);
+    stagedStat = await runGit(["diff", "--cached", "--stat"], cwd);
   }
 
-  if (stagedDiff.trim()) {
-    statSummary = await runGit(["diff", "--cached", "--stat"], cwd);
-    return `STAGED CHANGES SUMMARY:\n${statSummary}\n\nSTAGED DIFF:\n${stagedDiff}`;
+  if (stagedStat.trim()) {
+    const stagedDiff = await runGitDiffFiltered(["diff", "--cached"], cwd);
+    if (stagedDiff.trim()) {
+      return `STAGED CHANGES SUMMARY:\n${stagedStat}\n\nSTAGED DIFF:\n${stagedDiff}`;
+    }
+    return `STAGED CHANGES SUMMARY (only lockfiles or excluded generated files modified):\n${stagedStat}`;
   }
 
-  const unstagedDiff = await runGit(["diff"], cwd);
-  if (unstagedDiff.trim()) {
-    statSummary = await runGit(["diff", "--stat"], cwd);
-    return `UNSTAGED CHANGES SUMMARY:\n${statSummary}\n\nUNSTAGED DIFF:\n${unstagedDiff}`;
+  const unstagedStat = await runGit(["diff", "--stat"], cwd);
+  if (unstagedStat.trim()) {
+    const unstagedDiff = await runGitDiffFiltered(["diff"], cwd);
+    if (unstagedDiff.trim()) {
+      return `UNSTAGED CHANGES SUMMARY:\n${unstagedStat}\n\nUNSTAGED DIFF:\n${unstagedDiff}`;
+    }
+    return `UNSTAGED CHANGES SUMMARY (only lockfiles or excluded generated files modified):\n${unstagedStat}`;
   }
 
   const status = await runGit(["status", "--short"], cwd);
@@ -654,10 +1117,8 @@ function inspectDiffPreFlight(diffText, branchName = "") {
 
 async function generateCommitMessage(repo, autoStage = false) {
   const cwd = repo.rootUri.fsPath;
-  const provider = getSetting("provider") || "openai";
-  const modelOverride = getSetting("model");
-  const apiKey = await resolveApiKey(provider);
-  if (!apiKey) return null;
+  const ctx = await resolveProviderContext();
+  if (!ctx) return null;
 
   let diffContent = await buildDiffContent(cwd, autoStage);
   if (!diffContent) {
@@ -688,10 +1149,12 @@ async function generateCommitMessage(repo, autoStage = false) {
 
   const userPrompt = `Analyze this git diff and produce the commit message:\n${ticketInstruction}${diffContent}`;
   const commitMsg = await executeAiCompletion(
-    provider,
-    apiKey,
-    modelOverride,
+    ctx.provider,
+    ctx.apiKey,
+    ctx.modelOverride,
     userPrompt,
+    buildCommitSystemPrompt(),
+    600,
   );
 
   if (preFlight.hasDebugArtifacts) {
@@ -871,37 +1334,6 @@ async function applyVersionBump(pkgInfo, newVersion, cwd) {
     pkgInfo.pkg.version = newVersion;
     const jsonStr = JSON.stringify(pkgInfo.pkg, null, 2) + "\n";
     fs.writeFileSync(pkgInfo.pkgPath, jsonStr, "utf8");
-    try {
-      const userHome = process.env.USERPROFILE || process.env.HOME || "";
-      const localTargets = [
-        path.join(
-          userHome,
-          ".antigravity-ide",
-          "extensions",
-          "smart-commit-generator",
-          "package.json",
-        ),
-        path.join(
-          userHome,
-          ".antigravity",
-          "extensions",
-          "smart-commit-generator",
-          "package.json",
-        ),
-        path.join(
-          userHome,
-          ".vscode",
-          "extensions",
-          "smart-commit-generator",
-          "package.json",
-        ),
-      ];
-      for (const target of localTargets) {
-        if (fs.existsSync(path.dirname(target))) {
-          fs.writeFileSync(target, jsonStr, "utf8");
-        }
-      }
-    } catch (e) {}
     // Automatically update CHANGELOG.md with recent commits
     try {
       const changelogPath = path.join(cwd, "CHANGELOG.md");
@@ -1060,6 +1492,9 @@ function updateStatusBarItem(statusBar) {
 }
 
 function activate(context) {
+  extensionSecrets = context.secrets;
+  migrateAllLegacyApiKeys(false).catch(() => {});
+
   // 1. Status Bar Quick Launcher
   const statusBar = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
@@ -1077,7 +1512,7 @@ function activate(context) {
     initialFast,
   );
 
-  // Auto-sync context and status bar when configuration changes
+  // Auto-sync context, status bar, secure key migration, and views when configuration changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("smartCommit")) {
@@ -1088,6 +1523,10 @@ function activate(context) {
           isFast,
         );
         updateStatusBarItem(statusBar);
+        migrateAllLegacyApiKeys(false).catch(() => {});
+        if (globalNotifyAllViews) {
+          globalNotifyAllViews();
+        }
       }
     }),
   );
@@ -1107,6 +1546,9 @@ function activate(context) {
       enableFast,
     );
     updateStatusBarItem(statusBar);
+    if (globalNotifyAllViews) {
+      globalNotifyAllViews();
+    }
     vscode.window.showInformationMessage(
       enableFast
         ? "Smart Git: Fast Mode enabled (Instant 1-click push with zero dialogs)."
@@ -1172,8 +1614,13 @@ function activate(context) {
             command: "smartCommit.toggleFastPush",
           },
           {
+            label: "$(key) Manage API Keys (Secure Storage)",
+            description: "Add, update, or remove encrypted AI provider keys",
+            command: "smartCommit.manageApiKeys",
+          },
+          {
             label: "$(gear) Extension Settings",
-            description: "Configure OpenAI / Gemini API keys and defaults",
+            description: "Configure AI provider, commit language, exclusions & prompts",
             command: "workbench.action.openSettings",
             args: ["smartCommit"],
           },
@@ -1411,7 +1858,7 @@ function activate(context) {
               targetBranch,
             );
             try {
-              diffBody = await runGit(["diff", `${targetBranch}...HEAD`], cwd);
+              diffBody = await runGitDiffFiltered(["diff", `${targetBranch}...HEAD`], cwd);
             } catch (e) {
               diffBody = "";
             }
@@ -1519,10 +1966,9 @@ function activate(context) {
       }
 
       const cwd = repo.rootUri.fsPath;
-      const provider = getSetting("provider") || "openai";
-      const modelOverride = getSetting("model");
-      const apiKey = await resolveApiKey(provider);
-      if (!apiKey) return;
+      const ctx = await resolveProviderContext();
+      if (!ctx) return;
+      const { provider, apiKey, modelOverride } = ctx;
 
       await vscode.window.withProgress(
         {
@@ -1581,9 +2027,9 @@ function activate(context) {
 
             let diffBody = "";
             try {
-              diffBody = await runGit(["diff", `${baseBranch}...HEAD`], cwd);
+              diffBody = await runGitDiffFiltered(["diff", `${baseBranch}...HEAD`], cwd);
             } catch (e) {
-              diffBody = await runGit(["diff"], cwd).catch(() => "");
+              diffBody = await runGitDiffFiltered(["diff"], cwd).catch(() => "");
             }
 
             if (diffBody.length > 30000) {
@@ -1610,8 +2056,8 @@ Please generate the full Pull Request description:`;
               apiKey,
               modelOverride,
               prPrompt,
-              PR_SYSTEM_PROMPT,
-              1000,
+              buildPrSystemPrompt(),
+              1200,
             );
 
             if (!prMarkdown) {
@@ -1653,10 +2099,9 @@ Please generate the full Pull Request description:`;
       }
 
       const cwd = repo.rootUri.fsPath;
-      const provider = getSetting("provider") || "openai";
-      const modelOverride = getSetting("model");
-      const apiKey = await resolveApiKey(provider);
-      if (!apiKey) return;
+      const ctx = await resolveProviderContext();
+      if (!ctx) return;
+      const { provider, apiKey, modelOverride } = ctx;
 
       let currentBranch = "";
       try {
@@ -1734,7 +2179,7 @@ Please generate the full Pull Request description:`;
 
             let diffBody = "";
             try {
-              diffBody = await runGit(
+              diffBody = await runGitDiffFiltered(
                 ["diff", `${selectedTarget}...HEAD`],
                 cwd,
               );
@@ -1959,16 +2404,21 @@ Write a comprehensive branch comparison and architecture report:`;
   const disposableSelectProvider = vscode.commands.registerCommand(
     "smartCommit.selectProvider",
     async () => {
-      const currentProvider = getSetting("provider") || "openai";
+      const currentProvider = getSetting("provider") || "gemini";
       const items = [
         {
           label: "$(sparkle) Google Gemini",
-          description: "100% Free tier (1,500 req/day)",
+          description: "Free tier available via Google AI Studio (gemini-3.8-flash)",
           value: "gemini",
         },
         {
+          label: "$(copilot) Built-in IDE AI (Copilot)",
+          description: "Zero API key — reuses active VS Code Language Model (VS Code 1.90+)",
+          value: "vscode-lm",
+        },
+        {
           label: "$(zap) Groq",
-          description: "100% Free tier (Sub-second LPU inference)",
+          description: "Free tier available — ultra-fast LPU inference (llama-3.3-70b)",
           value: "groq",
         },
         {
@@ -1977,19 +2427,39 @@ Write a comprehensive branch comparison and architecture report:`;
           value: "ollama",
         },
         {
-          label: "$(circuit-board) DeepSeek",
-          description: "Ultra-low cost ($0.14 / 1M tokens)",
-          value: "deepseek",
-        },
-        {
-          label: "$(rocket) Grok (xAI)",
-          description: "Latest Grok-2 by xAI",
-          value: "grok",
+          label: "$(comment-discussion) Anthropic Claude",
+          description: "Fast & accurate Claude Haiku 5.5",
+          value: "claude",
         },
         {
           label: "$(hubot) OpenAI",
           description: "Standard GPT-4o-mini / GPT-4o",
           value: "openai",
+        },
+        {
+          label: "$(globe) OpenRouter",
+          description: "Access 200+ models through a single API key",
+          value: "openrouter",
+        },
+        {
+          label: "$(circuit-board) DeepSeek",
+          description: "Low-cost coding model (deepseek-chat)",
+          value: "deepseek",
+        },
+        {
+          label: "$(rocket) Grok (xAI)",
+          description: "Fast non-reasoning Grok 4.20 by xAI",
+          value: "grok",
+        },
+        {
+          label: "$(plug) Custom OpenAI-Compatible",
+          description: "LM Studio, Azure OpenAI, vLLM, LiteLLM, or private proxy",
+          value: "custom",
+        },
+        {
+          label: "$(key) Manage Encrypted API Keys...",
+          description: "Add, update, or remove keys in VS Code Secret Storage",
+          value: "__manage_keys__",
         },
       ];
 
@@ -1998,26 +2468,174 @@ Write a comprehensive branch comparison and architecture report:`;
         placeHolder: `Current provider: ${currentProvider}`,
       });
 
-      if (selected) {
-        await vscode.workspace
-          .getConfiguration("smartCommit")
-          .update(
-            "provider",
-            selected.value,
-            vscode.ConfigurationTarget.Global,
-          );
-        vscode.window.showInformationMessage(
-          `Smart Git: Switched AI provider to ${selected.label.replace(/\$\([^)]+\)\s*/, "")}`,
+      if (!selected) return;
+
+      if (selected.value === "__manage_keys__") {
+        await vscode.commands.executeCommand("smartCommit.manageApiKeys");
+        return;
+      }
+
+      await vscode.workspace
+        .getConfiguration("smartCommit")
+        .update(
+          "provider",
+          selected.value,
+          vscode.ConfigurationTarget.Global,
         );
-        if (actionsViewProvider) {
-          actionsViewProvider.updateState();
-        }
+      vscode.window.showInformationMessage(
+        `Smart Git: Switched AI provider to ${selected.label.replace(/\$\([^)]+\)\s*/, "")}`,
+      );
+      notifyAllViews();
+    },
+  );
+
+  // 9b. Command: Manage API Keys in Encrypted Secret Storage
+  const disposableManageApiKeys = vscode.commands.registerCommand(
+    "smartCommit.manageApiKeys",
+    async () => {
+      await migrateAllLegacyApiKeys(true);
+
+      const items = [];
+      for (const [providerId, meta] of Object.entries(SECRET_PROVIDERS)) {
+        const existing = await getStoredApiKey(providerId);
+        items.push({
+          label: `$(key) ${meta.label}`,
+          description: existing
+            ? "Configured (Encrypted Secret Storage)"
+            : meta.optionalKey
+              ? "Not set (Optional)"
+              : "Not configured",
+          providerId,
+          meta,
+          hasKey: Boolean(existing),
+        });
+      }
+
+      const chosen = await vscode.window.showQuickPick(items, {
+        title: "Smart Git: Manage API Keys (Encrypted Secret Storage)",
+        placeHolder: "Select a provider to add, update, or remove its API key",
+      });
+      if (!chosen) return;
+
+      const actions = [
+        {
+          label: chosen.hasKey ? "$(edit) Update API Key" : "$(add) Set API Key",
+          action: "set",
+        },
+      ];
+      if (chosen.meta.keyUrl) {
+        actions.push({
+          label: chosen.meta.isFreeTier
+            ? "$(link-external) Open Key Portal (Free Tier)"
+            : "$(link-external) Open Key Portal",
+          action: "portal",
+        });
+      }
+      if (chosen.hasKey) {
+        actions.push({
+          label: "$(trash) Remove Stored API Key",
+          action: "delete",
+        });
+      }
+
+      const act = await vscode.window.showQuickPick(actions, {
+        title: `Smart Git: ${chosen.meta.label} API Key`,
+        placeHolder: "Choose an action",
+      });
+      if (!act) return;
+
+      if (act.action === "delete") {
+        await storeApiKey(chosen.providerId, "");
+        vscode.window.showInformationMessage(
+          `Smart Git: Removed ${chosen.meta.label} API key from Secret Storage.`,
+        );
+        return;
+      }
+
+      if (act.action === "portal" && chosen.meta.keyUrl) {
+        await vscode.env.openExternal(vscode.Uri.parse(chosen.meta.keyUrl));
+      }
+
+      const entered = await vscode.window.showInputBox({
+        title: `Smart Git: Save ${chosen.meta.label} API Key`,
+        prompt: `Paste your ${chosen.meta.label} API key (stored encrypted in VS Code Secret Storage)`,
+        password: true,
+        ignoreFocusOut: true,
+      });
+
+      if (entered && entered.trim()) {
+        await storeApiKey(chosen.providerId, entered.trim());
+        vscode.window.showInformationMessage(
+          `Smart Git: Saved ${chosen.meta.label} API key securely!`,
+        );
       }
     },
   );
 
-  // 10. Webview Providers for Activity Bar & Source Control View
-  const actionsViewProvider = new SmartGitViewProvider(context.extensionUri);
+  // 10. Activity Bar Badge Carrier & Webview Providers for Activity Bar & Source Control View
+  let badgeTreeView = null;
+  try {
+    if (typeof vscode.window.createTreeView === "function") {
+      badgeTreeView = vscode.window.createTreeView("smartCommit.badgeView", {
+        treeDataProvider: {
+          getTreeItem: (item) => item,
+          getChildren: () => [],
+        },
+      });
+      context.subscriptions.push(badgeTreeView);
+    }
+  } catch (e) {}
+
+  let lastBadgeCount = 0;
+  let lastBadgeRepoName = "";
+  let actionsViewProvider = null;
+
+  function applyActivityBarBadge(count, repoName = "") {
+    const safeCount =
+      Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+    lastBadgeCount = safeCount;
+    lastBadgeRepoName = repoName || "";
+
+    const badge =
+      safeCount > 0
+        ? {
+            value: safeCount,
+            tooltip: repoName
+              ? `${safeCount} pending change${safeCount === 1 ? "" : "s"} (${repoName})`
+              : `${safeCount} pending change${safeCount === 1 ? "" : "s"}`,
+          }
+        : undefined;
+
+    if (actionsViewProvider && actionsViewProvider._view) {
+      // Once the Activity Bar webview is resolved, it owns the badge alone (prevents double-counting)
+      if (badgeTreeView) {
+        badgeTreeView.badge = undefined;
+      }
+      actionsViewProvider._view.badge = badge;
+    } else if (badgeTreeView) {
+      badgeTreeView.badge = badge;
+    }
+  }
+
+  async function refreshActivityBarBadge() {
+    try {
+      const repo = getTargetRepository();
+      if (!repo) {
+        applyActivityBarBadge(0, "");
+        return;
+      }
+      const cwd = repo.rootUri.fsPath;
+      const repoName = path.basename(cwd);
+      const stat = await runGit(["status", "--porcelain=v1", "-u"], cwd);
+      const count = stat.split("\n").filter((l) => l.length >= 3).length;
+      applyActivityBarBadge(count, repoName);
+    } catch (e) {}
+  }
+
+  actionsViewProvider = new SmartGitViewProvider(context.extensionUri, {
+    onChangesCount: (count, repoName) => applyActivityBarBadge(count, repoName),
+    onDispose: () => applyActivityBarBadge(lastBadgeCount, lastBadgeRepoName),
+  });
   const actionsViewScmProvider = new SmartGitViewProvider(context.extensionUri);
 
   const viewDisposable1 = vscode.window.registerWebviewViewProvider(
@@ -2030,23 +2648,29 @@ Write a comprehensive branch comparison and architecture report:`;
   );
 
   function notifyAllViews(extra = {}) {
-    actionsViewProvider.updateState(extra);
+    if (actionsViewProvider._view) {
+      actionsViewProvider.updateState(extra);
+    } else {
+      refreshActivityBarBadge();
+    }
     actionsViewScmProvider.updateState(extra);
   }
 
   globalNotifyAllViews = notifyAllViews;
 
-  // Real-time automatic Git & file changes synchronization
+  // Real-time automatic Git & file changes synchronization (keeps Activity Bar badge live even when hidden)
   let autoRefreshTimer = null;
   function debouncedAutoRefresh() {
-    const isVisible =
-      (actionsViewProvider._view && actionsViewProvider._view.visible) ||
-      (actionsViewScmProvider._view && actionsViewScmProvider._view.visible);
-    if (!isVisible) return;
-
     if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
     autoRefreshTimer = setTimeout(() => {
-      notifyAllViews();
+      const isVisible =
+        (actionsViewProvider._view && actionsViewProvider._view.visible) ||
+        (actionsViewScmProvider._view && actionsViewScmProvider._view.visible);
+      if (isVisible) {
+        notifyAllViews();
+      } else {
+        refreshActivityBarBadge();
+      }
     }, 350);
   }
 
@@ -2086,6 +2710,8 @@ Write a comprehensive branch comparison and architecture report:`;
         })
       );
     }
+
+    refreshActivityBarBadge();
   }
 
   const gitExt = vscode.extensions.getExtension("vscode.git");
@@ -2127,8 +2753,8 @@ Write a comprehensive branch comparison and architecture report:`;
     "smartCommit.selectRepository",
     async () => {
       const gitExtension = vscode.extensions.getExtension("vscode.git");
-      if (!gitExtension) return;
-      const api = gitExtension.exports.getAPI(1);
+      if (!gitExtension || !gitExtension.isActive) return;
+      const api = gitExtension.exports?.getAPI?.(1);
       if (!api || !api.repositories || api.repositories.length <= 1) {
         vscode.window.showInformationMessage(
           "Smart Git: Only one repository open in workspace.",
@@ -2570,13 +3196,6 @@ Write a comprehensive branch comparison and architecture report:`;
     },
   );
 
-  vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration("smartCommit")) {
-      notifyAllViews();
-      updateStatusBarMode(getSetting("confirmBeforePush") === false);
-    }
-  });
-
   context.subscriptions.push(
     statusBar,
     disposableQuickMenu,
@@ -2590,6 +3209,7 @@ Write a comprehensive branch comparison and architecture report:`;
     disposableGeneratePR,
     disposableCompare,
     disposableSelectProvider,
+    disposableManageApiKeys,
     disposableSelectRepo,
     disposableCommitOnly,
     disposablePushCommits,
@@ -2601,13 +3221,26 @@ Write a comprehensive branch comparison and architecture report:`;
 }
 
 class SmartGitViewProvider {
-  constructor(extensionUri) {
+  constructor(extensionUri, options = {}) {
     this._extensionUri = extensionUri;
     this._view = null;
+    this._onChangesCount =
+      typeof options.onChangesCount === "function" ? options.onChangesCount : null;
+    this._onDispose =
+      typeof options.onDispose === "function" ? options.onDispose : null;
   }
 
   resolveWebviewView(webviewView, context, _token) {
     this._view = webviewView;
+
+    if (typeof webviewView.onDidDispose === "function") {
+      webviewView.onDidDispose(() => {
+        this._view = null;
+        if (this._onDispose) {
+          this._onDispose();
+        }
+      });
+    }
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -2618,7 +3251,10 @@ class SmartGitViewProvider {
       vscode.Uri.joinPath(this._extensionUri, "icon.png"),
     );
 
-    webviewView.webview.html = this._getHtmlForWebview(iconUri);
+    webviewView.webview.html = this._getHtmlForWebview(
+      webviewView.webview,
+      iconUri,
+    );
 
     webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.command) {
@@ -2856,6 +3492,15 @@ class SmartGitViewProvider {
         case "selectProvider":
           vscode.commands.executeCommand("smartCommit.selectProvider");
           break;
+        case "manageApiKeys":
+          vscode.commands.executeCommand("smartCommit.manageApiKeys");
+          break;
+        case "copyText":
+          if (data.text) {
+            await vscode.env.clipboard.writeText(String(data.text));
+            vscode.window.setStatusBarMessage("Smart Git: Copied to clipboard", 2000);
+          }
+          break;
         case "refresh":
           this.updateState();
           break;
@@ -2873,7 +3518,7 @@ class SmartGitViewProvider {
 
   async updateState(extra = {}) {
     if (!this._view) return;
-    const provider = getSetting("provider") || "openai";
+    const provider = getSetting("provider") || "gemini";
     const isFast = getSetting("confirmBeforePush") === false;
 
     let branch = "HEAD";
@@ -2888,8 +3533,8 @@ class SmartGitViewProvider {
 
     try {
       const gitExtension = vscode.extensions.getExtension("vscode.git");
-      if (gitExtension) {
-        const api = gitExtension.exports.getAPI(1);
+      if (gitExtension && gitExtension.isActive) {
+        const api = gitExtension.exports?.getAPI?.(1);
         if (api && api.repositories) {
           repoCount = api.repositories.length;
         }
@@ -3034,12 +3679,20 @@ class SmartGitViewProvider {
 
     const providerLabels = {
       gemini: "Gemini (Free)",
+      "vscode-lm": "IDE AI (Copilot)",
       groq: "Groq (Free)",
       ollama: "Ollama (Offline)",
+      claude: "Claude",
+      openai: "OpenAI",
+      openrouter: "OpenRouter",
       deepseek: "DeepSeek",
       grok: "Grok (xAI)",
-      openai: "OpenAI",
+      custom: "Custom AI",
     };
+
+    if (this._onChangesCount) {
+      this._onChangesCount(files.length, repoName);
+    }
 
     this._view.webview.postMessage({
       type: "update",
@@ -3057,11 +3710,14 @@ class SmartGitViewProvider {
     });
   }
 
-  _getHtmlForWebview(iconUri = "") {
+  _getHtmlForWebview(webview, iconUri = "") {
+    const nonce = crypto.randomBytes(16).toString("hex");
+    const cspSource = webview ? webview.cspSource : "";
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data:; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     * {
@@ -3096,7 +3752,7 @@ class SmartGitViewProvider {
       object-fit: cover;
       vertical-align: middle;
       cursor: pointer;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
       transition: transform 0.15s ease;
       flex-shrink: 0;
     }
@@ -3110,10 +3766,10 @@ class SmartGitViewProvider {
       font-size: 11px;
       padding: 3px 8px;
       border-radius: 12px;
-      background: var(--vscode-badge-background, #333);
-      color: var(--vscode-badge-foreground, #fff);
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
       cursor: pointer;
-      border: 1px solid var(--vscode-widget-border, transparent);
+      border: 1px solid var(--vscode-contrastBorder, var(--vscode-widget-border, transparent));
       transition: opacity 0.15s ease, transform 0.1s ease;
       white-space: nowrap;
     }
@@ -3123,32 +3779,17 @@ class SmartGitViewProvider {
       justify-content: center;
       flex-shrink: 0;
     }
-    /*
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 12px;
-      background: var(--vscode-badge-background, #333);
-      color: var(--vscode-badge-foreground, #fff);
-      cursor: pointer;
-      border: 1px solid var(--vscode-widget-border, transparent);
-      transition: opacity 0.15s ease, transform 0.1s ease;
-      white-space: nowrap;
-    }
-    */
     .pill:hover {
       opacity: 0.85;
       transform: translateY(-1px);
     }
     .pill-fast {
-      background: #e67e22;
-      color: #fff;
+      background: #c25e00;
+      color: #ffffff;
     }
     .pill-safe {
-      background: #2980b9;
-      color: #fff;
+      background: #1b6ca8;
+      color: #ffffff;
     }
     .commit-box-container {
       margin-bottom: 10px;
@@ -3161,29 +3802,29 @@ class SmartGitViewProvider {
       font-family: var(--vscode-editor-font-family, monospace);
       font-size: 12px;
       line-height: 1.45;
-      background: var(--vscode-input-background, #1e1e1e);
-      color: var(--vscode-input-foreground, #ccc);
-      border: 1px solid var(--vscode-input-border, #3c3c3c);
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, rgba(128,128,128,0.35)));
       border-radius: 4px;
       resize: vertical;
       outline: none;
       user-select: text;
     }
     .commit-textarea:focus {
-      border-color: var(--vscode-focusBorder, #007acc);
+      border-color: var(--vscode-focusBorder);
     }
     .commit-box-footer {
       display: flex;
       justify-content: space-between;
       align-items: center;
       font-size: 10px;
-      opacity: 0.7;
+      opacity: 0.75;
       margin-top: 3px;
       padding: 0 2px;
     }
     .clear-link {
       cursor: pointer;
-      color: var(--vscode-textLink-foreground, #3794ff);
+      color: var(--vscode-textLink-foreground);
     }
     .clear-link:hover {
       text-decoration: underline;
@@ -3196,14 +3837,14 @@ class SmartGitViewProvider {
       justify-content: center;
       padding: 9px 10px;
       border-radius: 5px;
-      border: none;
+      border: 1px solid var(--vscode-contrastBorder, transparent);
       cursor: pointer;
       margin-bottom: 6px;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
       font-weight: 600;
       font-size: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.14);
       transition: background 0.15s, transform 0.1s;
     }
     .hero-btn:hover {
@@ -3230,21 +3871,19 @@ class SmartGitViewProvider {
       margin-top: 2px;
     }
     .btn-commit-push {
-      background: #16a085;
-      color: #fff;
+      background: #0f766e;
+      color: #ffffff;
     }
     .btn-commit-push:hover {
-      background: #1abc9c;
+      background: #0d9488;
     }
     .btn-commit-only {
-      background: #252b37;
-      border: 1px solid #3c4659;
-      color: #f1f5f9;
+      background: var(--vscode-button-secondaryBackground);
+      border: 1px solid var(--vscode-contrastBorder, var(--vscode-panel-border, rgba(128,128,128,0.3)));
+      color: var(--vscode-button-secondaryForeground);
     }
     .btn-commit-only:hover {
-      background: #323a4b;
-      border-color: #515f78;
-      color: #ffffff;
+      background: var(--vscode-button-secondaryHoverBackground);
     }
     .btn-row {
       display: flex;
@@ -3271,15 +3910,15 @@ class SmartGitViewProvider {
       border-radius: 5px;
       background: var(--vscode-editor-background);
       color: var(--vscode-foreground);
-      border: 1px solid var(--vscode-widget-border, #444);
+      border: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, rgba(128,128,128,0.3)));
       cursor: pointer;
       font-size: 11px;
       font-weight: 500;
       transition: all 0.15s;
     }
     .grid-btn:hover {
-      background: var(--vscode-list-hoverBackground, #333);
-      border-color: var(--vscode-focusBorder, #007acc);
+      background: var(--vscode-list-hoverBackground);
+      border-color: var(--vscode-focusBorder);
       transform: translateY(-1px);
     }
     .grid-btn-full {
@@ -3289,9 +3928,9 @@ class SmartGitViewProvider {
     /* Outgoing Commits Section */
     .outgoing-container {
       margin: 8px 0;
-      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
+      border: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, rgba(128,128,128,0.25)));
       border-radius: 5px;
-      background: var(--vscode-editor-background, #1e1e1e);
+      background: var(--vscode-sideBar-background, var(--vscode-editor-background));
       overflow: hidden;
     }
     .outgoing-header {
@@ -3301,11 +3940,11 @@ class SmartGitViewProvider {
       padding: 6px 8px;
       cursor: pointer;
       user-select: none;
-      background: var(--vscode-sideBarSectionHeader-background, rgba(255,255,255,0.03));
-      border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+      background: var(--vscode-sideBarSectionHeader-background, rgba(128,128,128,0.08));
+      border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.18));
     }
     .outgoing-header:hover {
-      background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.06));
+      background: var(--vscode-list-hoverBackground);
     }
     .outgoing-header-left {
       display: flex;
@@ -3323,13 +3962,13 @@ class SmartGitViewProvider {
       font-weight: 600;
       padding: 1px 6px;
       border-radius: 10px;
-      background: var(--vscode-badge-background, #3a3d41);
-      color: var(--vscode-badge-foreground, #ffffff);
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
       transition: background 0.15s ease;
     }
     .outgoing-count-badge.has-outgoing {
-      background: #0078d4;
-      color: #ffffff;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
     }
     .outgoing-actions {
       display: flex;
@@ -3337,8 +3976,8 @@ class SmartGitViewProvider {
       gap: 4px;
     }
     .outgoing-push-btn {
-      background: #0e639c;
-      color: #ffffff;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
       border: none;
       border-radius: 3px;
       padding: 2px 8px;
@@ -3351,7 +3990,7 @@ class SmartGitViewProvider {
       transition: background 0.12s ease;
     }
     .outgoing-push-btn:hover {
-      background: #1177bb;
+      background: var(--vscode-button-hoverBackground);
     }
     .outgoing-list {
       max-height: 180px;
@@ -3364,7 +4003,7 @@ class SmartGitViewProvider {
     .empty-outgoing {
       padding: 10px 8px;
       font-size: 11px;
-      opacity: 0.6;
+      opacity: 0.65;
       text-align: center;
       font-style: italic;
     }
@@ -3379,7 +4018,7 @@ class SmartGitViewProvider {
       border-radius: 4px;
     }
     .commit-item:hover {
-      background: var(--vscode-list-hoverBackground, #2a2d2e);
+      background: var(--vscode-list-hoverBackground);
     }
     .commit-item-left {
       display: flex;
@@ -3394,8 +4033,8 @@ class SmartGitViewProvider {
       font-family: var(--vscode-editor-font-family, monospace);
       font-size: 10px;
       font-weight: 600;
-      color: #4fc1ff;
-      background: rgba(79, 193, 255, 0.12);
+      color: var(--vscode-textLink-foreground);
+      background: rgba(128, 128, 128, 0.14);
       padding: 1px 4px;
       border-radius: 3px;
       flex-shrink: 0;
@@ -3409,7 +4048,7 @@ class SmartGitViewProvider {
     }
     .commit-time {
       font-size: 10px;
-      opacity: 0.5;
+      opacity: 0.6;
       flex-shrink: 0;
     }
     .commit-actions {
@@ -3419,9 +4058,9 @@ class SmartGitViewProvider {
       flex-shrink: 0;
     }
     .commit-action-btn-undo {
-      background: rgba(234, 179, 8, 0.15);
-      border: 1px solid rgba(234, 179, 8, 0.35);
-      color: #eab308;
+      background: rgba(184, 134, 11, 0.14);
+      border: 1px solid var(--vscode-editorWarning-foreground, #b8860b);
+      color: var(--vscode-editorWarning-foreground, #b8860b);
       border-radius: 3px;
       padding: 2px 6px;
       font-size: 10px;
@@ -3433,17 +4072,15 @@ class SmartGitViewProvider {
       transition: all 0.12s ease;
     }
     .commit-action-btn-undo:hover {
-      background: rgba(234, 179, 8, 0.3);
-      border-color: #facc15;
-      color: #fef08a;
+      background: rgba(184, 134, 11, 0.25);
     }
 
     /* Changed Files Section */
     .changes-container {
       margin: 8px 0;
-      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
+      border: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, rgba(128,128,128,0.25)));
       border-radius: 5px;
-      background: var(--vscode-editor-background, #1e1e1e);
+      background: var(--vscode-sideBar-background, var(--vscode-editor-background));
       overflow: hidden;
     }
     .changes-header {
@@ -3453,11 +4090,11 @@ class SmartGitViewProvider {
       padding: 6px 8px;
       cursor: pointer;
       user-select: none;
-      background: var(--vscode-sideBarSectionHeader-background, rgba(255,255,255,0.03));
-      border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+      background: var(--vscode-sideBarSectionHeader-background, rgba(128,128,128,0.08));
+      border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.18));
     }
     .changes-header:hover {
-      background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.06));
+      background: var(--vscode-list-hoverBackground);
     }
     .changes-header-left {
       display: flex;
@@ -3484,27 +4121,27 @@ class SmartGitViewProvider {
       font-weight: 600;
       padding: 1px 6px;
       border-radius: 10px;
-      background: #0078d4;
-      color: #ffffff;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
     }
     .changes-action-btn {
       font-size: 13px;
-      opacity: 0.7;
+      opacity: 0.75;
       padding: 2px 5px;
       border-radius: 3px;
       cursor: pointer;
     }
     .changes-action-btn:hover {
       opacity: 1;
-      background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.1));
+      background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.16));
     }
     .changes-action-btn-danger:hover {
-      color: #f14c4c;
-      background: rgba(241, 76, 76, 0.15);
+      color: var(--vscode-gitDecoration-deletedResourceForeground, #d13438);
+      background: rgba(209, 52, 56, 0.15);
     }
     .changes-action-btn-success:hover {
-      color: #73c991;
-      background: rgba(115, 201, 145, 0.15);
+      color: var(--vscode-gitDecoration-untrackedResourceForeground, #2e8b57);
+      background: rgba(46, 139, 87, 0.15);
     }
     .files-list {
       max-height: 180px;
@@ -3526,7 +4163,7 @@ class SmartGitViewProvider {
       border-radius: 4px;
     }
     .file-item:hover {
-      background: var(--vscode-list-hoverBackground, #2a2d2e);
+      background: var(--vscode-list-hoverBackground);
     }
     .file-info {
       display: flex;
@@ -3540,7 +4177,7 @@ class SmartGitViewProvider {
     }
     .file-info:hover .file-name {
       text-decoration: underline;
-      color: var(--vscode-textLink-foreground, #3794ff);
+      color: var(--vscode-textLink-foreground);
     }
     .file-name {
       font-weight: 500;
@@ -3550,7 +4187,7 @@ class SmartGitViewProvider {
     }
     .file-path {
       font-size: 10px;
-      opacity: 0.5;
+      opacity: 0.6;
       overflow: hidden;
       text-overflow: ellipsis;
     }
@@ -3564,7 +4201,7 @@ class SmartGitViewProvider {
       background: transparent;
       border: 1px solid transparent;
       color: var(--vscode-foreground);
-      opacity: 0.65;
+      opacity: 0.7;
       cursor: pointer;
       padding: 2px 4px;
       border-radius: 3px;
@@ -3575,27 +4212,27 @@ class SmartGitViewProvider {
     }
     .file-action-btn:hover {
       opacity: 1;
-      background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.15));
-      border-color: var(--vscode-widget-border, rgba(255, 255, 255, 0.2));
+      background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.16));
+      border-color: var(--vscode-panel-border, rgba(128,128,128,0.25));
     }
     .file-action-btn-staged {
-      color: #73c991;
+      color: var(--vscode-gitDecoration-untrackedResourceForeground, #2e8b57);
       opacity: 0.95;
     }
     .file-action-btn-staged:hover {
-      color: #ff7b72;
-      background: rgba(255, 123, 114, 0.15);
-      border-color: rgba(255, 123, 114, 0.3);
+      color: var(--vscode-gitDecoration-deletedResourceForeground, #d13438);
+      background: rgba(209, 52, 56, 0.15);
+      border-color: rgba(209, 52, 56, 0.3);
     }
     .file-action-btn-stage:hover {
-      color: #73c991;
-      background: rgba(115, 201, 145, 0.15);
-      border-color: rgba(115, 201, 145, 0.3);
+      color: var(--vscode-gitDecoration-untrackedResourceForeground, #2e8b57);
+      background: rgba(46, 139, 87, 0.15);
+      border-color: rgba(46, 139, 87, 0.3);
     }
     .file-action-btn-discard:hover {
-      color: #f14c4c;
-      background: rgba(241, 76, 76, 0.15);
-      border-color: rgba(241, 76, 76, 0.3);
+      color: var(--vscode-gitDecoration-deletedResourceForeground, #d13438);
+      background: rgba(209, 52, 56, 0.15);
+      border-color: rgba(209, 52, 56, 0.3);
     }
     .status-badge {
       font-size: 11px;
@@ -3609,13 +4246,13 @@ class SmartGitViewProvider {
       opacity: 0.8;
       text-decoration: underline;
     }
-    .status-m { color: #e2c08d; }
-    .status-u, .status-a { color: #73c991; }
-    .status-d { color: #f14c4c; }
-    .status-r { color: #73c991; }
+    .status-m { color: var(--vscode-gitDecoration-modifiedResourceForeground, #b07d2b); }
+    .status-u, .status-a { color: var(--vscode-gitDecoration-untrackedResourceForeground, #2e8b57); }
+    .status-d { color: var(--vscode-gitDecoration-deletedResourceForeground, #d13438); }
+    .status-r { color: var(--vscode-gitDecoration-untrackedResourceForeground, #2e8b57); }
     .empty-changes {
       font-size: 11px;
-      opacity: 0.6;
+      opacity: 0.65;
       font-style: italic;
       padding: 8px 10px;
     }
@@ -3625,9 +4262,9 @@ class SmartGitViewProvider {
       align-items: center;
       justify-content: space-between;
       font-size: 10px;
-      opacity: 0.8;
+      opacity: 0.85;
       padding-top: 7px;
-      border-top: 1px solid var(--vscode-widget-border, #333);
+      border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.25));
       flex-wrap: wrap;
       gap: 4px;
     }
@@ -3640,7 +4277,12 @@ class SmartGitViewProvider {
       cursor: pointer;
     }
     .clickable:hover {
-      color: var(--vscode-textLink-foreground, #3794ff);
+      color: var(--vscode-textLink-foreground);
+    }
+    .outgoing-pill-text {
+      display: none;
+      color: var(--vscode-textLink-foreground);
+      font-weight: 600;
     }
   </style>
 </head>
@@ -3794,14 +4436,14 @@ class SmartGitViewProvider {
       <span>Branch:</span> <strong id="branchName">main</strong>
     </div>
     <div class="status-item clickable" id="outgoingInfo" title="Commits waiting to be pushed (Click to push to remote)">
-      <span id="outgoingText" style="display:none; color: #4fc1ff; font-weight: 600;">↑ 0 to push</span>
+      <span id="outgoingText" class="outgoing-pill-text">↑ 0 to push</span>
     </div>
     <div class="status-item" id="stagingInfo" title="Staged and unstaged changes">
       <span id="stagedText">0 staged</span> &bull; <span id="unstagedText">0 modified</span>
     </div>
   </div>
 
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const textarea = document.getElementById('commitText');
     const charCount = document.getElementById('charCount');
@@ -3907,7 +4549,7 @@ class SmartGitViewProvider {
         hashSpan.style.cursor = 'pointer';
         hashSpan.addEventListener('click', (e) => {
           e.stopPropagation();
-          navigator.clipboard?.writeText(commit.hash || commit.shortHash || '');
+          vscode.postMessage({ command: 'copyText', text: commit.hash || commit.shortHash || '' });
         });
 
         const subjectSpan = document.createElement('span');
@@ -3946,7 +4588,7 @@ class SmartGitViewProvider {
         btnCopy.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5A1.75 1.75 0 0 1 5 6.75v1.5A1.75 1.75 0 0 1 3.25 10h-1.5A1.75 1.75 0 0 1 0 8.25v-1.5zm11 0c0-.966.784-1.75 1.75-1.75h1.5A1.75 1.75 0 0 1 16 6.75v1.5A1.75 1.75 0 0 1 14.25 10h-1.5A1.75 1.75 0 0 1 11 8.25v-1.5z"/><path d="M5 2.75C5 1.784 5.784 1 6.75 1h2.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 9.25 15h-2.5A1.75 1.75 0 0 1 5 13.25V2.75z"/></svg>';
         btnCopy.addEventListener('click', (e) => {
           e.stopPropagation();
-          navigator.clipboard?.writeText(commit.fullMsg || commit.subject || '');
+          vscode.postMessage({ command: 'copyText', text: commit.fullMsg || commit.subject || '' });
         });
         actions.appendChild(btnCopy);
 
@@ -3998,11 +4640,11 @@ class SmartGitViewProvider {
       const badge = document.getElementById('changesCountBadge');
       badge.textContent = currentFiles.length;
       if (currentFiles.length === 0) {
-        badge.style.background = 'var(--vscode-badge-background, #3a3d41)';
-        badge.style.color = 'var(--vscode-badge-foreground, #ffffff)';
+        badge.style.background = 'var(--vscode-badge-background)';
+        badge.style.color = 'var(--vscode-badge-foreground)';
       } else {
-        badge.style.background = '#0078d4';
-        badge.style.color = '#ffffff';
+        badge.style.background = 'var(--vscode-button-background)';
+        badge.style.color = 'var(--vscode-button-foreground)';
       }
 
       if (!currentFiles || currentFiles.length === 0) {
@@ -4130,9 +4772,6 @@ class SmartGitViewProvider {
         actions.appendChild(btnDiscard);
         actions.appendChild(btnOpenDiff);
         actions.appendChild(btnOpenFile);
-        /*
-        actions.appendChild(btnOpenDiff);
-        */
         actions.appendChild(badgeSpan);
 
         item.appendChild(info);
@@ -4190,16 +4829,6 @@ class SmartGitViewProvider {
           if (modeIcon) modeIcon.innerHTML = SHIELD_ICON;
           modeText.textContent = 'Safe Mode';
         }
-        /*
-        const modeText = document.getElementById('modeText');
-        if (msg.isFast) {
-          modePill.className = 'pill pill-fast';
-          modeText.textContent = 'Fast Mode';
-        } else {
-          modePill.className = 'pill pill-safe';
-          modeText.textContent = 'Safe Mode';
-        }
-        */
         if (msg.repoName) {
           document.getElementById('repoName').textContent = msg.repoName + (msg.repoCount > 1 ? ' ▾' : '');
         }

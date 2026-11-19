@@ -1,5 +1,11 @@
 .vscode/**
 .git/**
+.github/**
+.gitattributes
+.gitignore
 *.vsix
+**/*.map
 node_modules/**
+images/**
+media/demo.gif
 

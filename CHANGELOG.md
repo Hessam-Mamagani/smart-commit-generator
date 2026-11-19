@@ -2,6 +2,32 @@
 
 All notable changes to the "Smart Commit Generator AI" extension will be documented in this file.
 
+## [1.5.0] - 2026-11-19
+
+### Added
+- **Activity Bar Changes Counter Badge**: Added a live numeric badge on the Smart Commit Generator AI Activity Bar icon showing the real-time count of uncommitted changes (matching VS Code Source Control), updating automatically on file saves, staging, commits, and repo switches.
+- **Encrypted API Key Storage (`SecretStorage`)**: Migrated API keys out of plaintext `settings.json` into VS Code's encrypted `SecretStorage` with automatic migration and a dedicated `Smart Git: Manage API Keys (Secure Storage)` command.
+- **New AI Providers & Free Default**: Changed default provider from paid OpenAI to Free-tier Google Gemini, and added **Built-in IDE AI (Copilot / `vscode.lm`)**, **Anthropic Claude (`claude-haiku-5-5`)**, **OpenRouter**, and **Custom OpenAI-Compatible** endpoints.
+- **Commit Customizations**: Added `smartCommit.commitLanguage`, `smartCommit.useGitmoji`, and `smartCommit.customPrompt`.
+
+### Fixed
+- **Settings Crash Fix**: Removed broken duplicate `onDidChangeConfiguration` listener referencing undefined `updateStatusBarMode` and consolidated configuration syncing cleanly into `context.subscriptions`.
+- **Release Version Bump Safety**: Removed leftover local dev paths in `applyVersionBump` so bumping a project's `package.json` never touches local extension directories.
+- **Lockfile & Build Artifact Diff Filtering**: Excluded lockfiles (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, etc.) and build outputs from raw AI diffs via configurable `smartCommit.excludeFromDiff`, with automatic summary fallback when only lockfiles change.
+- **Gemini Thinking-Token Headroom**: Raised Gemini `maxOutputTokens`, configured `thinkingConfig.thinkingLevel` for Gemini 3+ models (with safe retry fallback), filtered thought parts, and added HTTP request timeouts across all providers.
+- **Updated Grok Default Model**: Replaced retired `grok-2-latest` with `grok-4.20-0309-non-reasoning`.
+- **Light Theme & Webview Security (CSP)**: Added a cryptographic nonce-based Content Security Policy, replaced hardcoded dark hex colors with VS Code theme variables for Dark/Light/High Contrast compatibility, and routed webview clipboard actions through the extension host.
+- **Packaging & Startup Optimization**: Replaced `"onStartupFinished"` with `"workspaceContains:.git"`, excluded non-runtime docs/GIFs in `.vscodeignore`, and synced `README.md` license to GPL-3.0.
+
+---
+
+## [1.4.7] - 2026-11-01
+
+### Changed
+- Finalized GPL-3.0 license migration and version release.
+
+---
+
 ## [1.4.6] - 2026-11-01
 
 ### Added & Changed

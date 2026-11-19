@@ -4,7 +4,7 @@
 [![Open VSX](https://img.shields.io/open-vsx/v/Hessam-Mamagani/smart-commit-generator-ai?style=flat-square&color=purple&label=Open%20VSX)](https://open-vsx.org/extension/Hessam-Mamagani/smart-commit-generator-ai)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
 
-**Fast, accurate, and context-aware Git assistant for VS Code, Cursor, and Antigravity IDE. Generate conventional commits, one-click commit & push, sync branches safely, draft comprehensive Pull Request descriptions, and resolve branch merge conflicts with OpenAI, Google Gemini, DeepSeek, Groq, Grok (xAI) & local Ollama.**
+**Fast, accurate, and context-aware Git assistant for VS Code, Cursor, and Antigravity IDE. Generate conventional commits, one-click commit & push, sync branches safely, draft comprehensive Pull Request descriptions, and resolve branch merge conflicts with Built-in IDE AI (Copilot), Google Gemini, Groq, Anthropic Claude, OpenAI, OpenRouter, DeepSeek, Grok (xAI), local Ollama, or any OpenAI-compatible endpoint.**
 
 ---
 
@@ -16,7 +16,7 @@
 
 ## Key Features
 
-- **Dedicated Smart Git AI Dashboard**: Unified Activity Bar and Source Control panel with interactive commit editor, real-time character counter, and instant one-click actions.
+- **Dedicated Smart Git AI Dashboard & Activity Bar Badge**: Unified Activity Bar and Source Control panel with a live changes counter badge on the Activity Bar icon, interactive commit editor, real-time character counter, and instant one-click actions.
 - **Strict Diff Inspection**: Reads your exact line additions and deletions—never assumes changes from file names or unrelated code.
 - **Conventional Commits**: Produces standardized headers (`feat`, `fix`, `refactor`, `perf`, `docs`, `chore`, etc.) under 72 characters, with optional bullet points for multi-part edits.
 - **Interactive Changed Files Explorer**: Live list of uncommitted changed files with an active blue counter badge. Click any file or `📄` to open the file directly in the editor; click `⧉` or the status badge (`M`, `U`, `A`, `D`) to view a side-by-side diff against `HEAD`.
@@ -29,8 +29,10 @@
 - **Pull Request (PR) Generator**: Compares your working branch against `main` or `master` to generate a comprehensive markdown PR description with summary, key changes, and verification checklist.
 - **Branch Compare & AI Conflict Advisor**: Dry-run merge check between any two branches. Identifies conflicts before they happen and provides production-ready merged code solutions.
 - **Status Bar Launcher**: Permanent `$(sparkle) Smart Git` status bar button displaying current mode with one-click access to all tools.
-- **Multi-AI Engine**: Seamlessly switch between **Google Gemini** (100% free tier, `gemini-3.8-flash`), **Groq** (free & ultra-fast LPU), **Ollama** (local, offline, zero API key), **Grok (xAI)**, **DeepSeek**, and **OpenAI**.
-- **100% Private & Local**: Your API keys stay on your machine. API calls are made directly to OpenAI/Google/Groq/xAI with zero telemetry or intermediate servers.
+- **Multi-AI Engine**: Seamlessly switch between **Google Gemini** (`gemini-3.8-flash`), **Built-in IDE AI / Copilot** (zero API key via `vscode.lm`), **Groq** (ultra-fast LPU), **Ollama** (local, offline, zero API key), **Anthropic Claude** (`claude-haiku-5-5`), **OpenRouter**, **Grok (xAI)**, **DeepSeek**, **OpenAI**, and **Custom OpenAI-Compatible** endpoints (LM Studio, Azure, vLLM, LiteLLM).
+- **Smart Lockfile & Artifact Filtering**: Automatically excludes noisy files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `dist/`, `*.min.js`) from raw diffs so real code changes are never truncated.
+- **Custom Language, Gitmoji & Prompts**: Generate commit messages and PR descriptions in your preferred language, optionally add Gitmoji prefixes, and append team-specific prompt instructions.
+- **Encrypted API Key Storage**: API keys are stored securely in VS Code's encrypted `SecretStorage` (never plaintext `settings.json`). All API calls go directly from your machine to your selected provider with zero intermediate servers.
 
 ---
 
@@ -53,16 +55,22 @@ Six dedicated action buttons are built right into your **Source Control** view h
 
 ## Supported AI Engines & Free Options
 
-Smart Commit Generator AI connects directly to your preferred AI model. Three of the supported providers are **100% free with zero credit card required**:
+Smart Commit Generator AI connects directly to your preferred AI model. Multiple supported options require **zero credit card or zero API key**:
 
-| Provider          |       Cost        | API Key Setup                                                          | Default Model             | Key Highlight                                            |
-| :---------------- | :---------------: | :--------------------------------------------------------------------- | :------------------------ | :------------------------------------------------------- |
-| **Google Gemini** |   **100% Free**   | Free key at [Google AI Studio](https://aistudio.google.com/app/apikey) | `gemini-3.8-flash`        | Generous free tier (1,500 requests/day, no credit card). |
-| **Groq**          |   **100% Free**   | Free key at [Groq Console](https://console.groq.com)                   | `llama-3.3-70b-versatile` | Ultra-fast LPU inference (~200ms sub-second generation). |
-| **Ollama**        |   **100% Free**   | Install from [ollama.com](https://ollama.com)                          | `llama3.2`                | Runs locally & offline. Zero API key, 100% private.      |
-| **Grok (xAI)**    | **Pay-As-You-Go** | API key at [xAI Console](https://console.x.ai)                         | `grok-2-latest`           | Cutting-edge reasoning & coding intelligence from xAI.   |
-| **DeepSeek**      |  **Ultra Cheap**  | API key at [DeepSeek Platform](https://platform.deepseek.com)          | `deepseek-chat`           | State-of-the-art coding intelligence at 90% lower cost.  |
-| **OpenAI**        | **Pay-As-You-Go** | API key at [OpenAI Platform](https://platform.openai.com)              | `gpt-4o-mini`             | Industry standard GPT models.                            |
+| Provider                     |       Cost        | Setup                                                                  | Default Model                | Key Highlight                                                              |
+| :--------------------------- | :---------------: | :--------------------------------------------------------------------- | :--------------------------- | :------------------------------------------------------------------------- |
+| **Google Gemini**            |   **Free Tier**   | Free key at [Google AI Studio](https://aistudio.google.com/app/apikey) | `gemini-3.8-flash`           | Default provider with free tier (subject to Google AI Studio daily caps).  |
+| **Built-in IDE AI (Copilot)**| **Included / 0 Key** | Uses active VS Code Language Model (VS Code 1.90+)                  | Auto-selected fast model     | Zero API key setup — reuses your existing Copilot subscription natively.   |
+| **Groq**                     |   **Free Tier**   | Free key at [Groq Console](https://console.groq.com)                   | `llama-3.3-70b-versatile`    | Ultra-fast LPU inference (~200ms sub-second generation).                   |
+| **Ollama**                   |   **100% Free**   | Install from [ollama.com](https://ollama.com)                          | `llama3.2`                   | Runs locally & offline. Zero API key, 100% private.                        |
+| **Anthropic Claude**         | **Pay-As-You-Go** | API key at [Anthropic Console](https://console.anthropic.com)          | `claude-haiku-5-5`           | Fast, sharp code reasoning from Anthropic.                                 |
+| **OpenAI**                   | **Pay-As-You-Go** | API key at [OpenAI Platform](https://platform.openai.com)              | `gpt-4o-mini`                | Industry standard GPT models.                                              |
+| **OpenRouter**               | **Pay-As-You-Go** | API key at [OpenRouter](https://openrouter.ai/keys)                    | `openai/gpt-4o-mini`         | Access 200+ frontier & open-source models with one key.                    |
+| **DeepSeek**                 |  **Ultra Cheap**  | API key at [DeepSeek Platform](https://platform.deepseek.com)          | `deepseek-chat`              | Strong coding intelligence at very low token cost.                         |
+| **Grok (xAI)**               | **Pay-As-You-Go** | API key at [xAI Console](https://console.x.ai)                         | `grok-4.20-0309-non-reasoning` | Fast non-reasoning Grok 4 model from xAI.                                |
+| **Custom OpenAI-Compatible** | **Self-Hosted / Any** | Set `smartCommit.customBaseUrl`                                    | `gpt-4o-mini` (overrideable) | Works with LM Studio, Azure OpenAI, vLLM, LiteLLM, or company proxies.     |
+
+> **Security Note**: API keys are stored encrypted using VS Code's built-in **Secret Storage** (`Smart Git: Manage API Keys`). Any legacy keys saved in `settings.json` are automatically migrated and cleared.
 
 > **Tip for Ollama**: Simply run `ollama run llama3.2` in your terminal and select `"ollama"` as your provider. No API key or internet access required.
 
@@ -115,21 +123,22 @@ Smart Commit Generator AI connects directly to your preferred AI model. Three of
 
 ## Configuration
 
-Open Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`:
+Open Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`, or run **`Smart Git: Manage API Keys (Secure Storage)`** from the Command Palette (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>) to store API keys encrypted:
 
-| Setting                         | Type      | Default                    | Description                                                                       |
-| :------------------------------ | :-------- | :------------------------- | :-------------------------------------------------------------------------------- |
-| `smartCommit.provider`          | `string`  | `"openai"`                 | AI provider: `"openai"`, `"gemini"`, `"deepseek"`, `"groq"`, `"grok"`, or `"ollama"`. |
-| `smartCommit.openaiApiKey`      | `string`  | `""`                       | OpenAI API key (`sk-proj-...`).                                                   |
-| `smartCommit.geminiApiKey`      | `string`  | `""`                       | Google Gemini API key (100% free at Google AI Studio).                            |
-| `smartCommit.deepseekApiKey`    | `string`  | `""`                       | DeepSeek API key (from platform.deepseek.com).                                    |
-| `smartCommit.groqApiKey`        | `string`  | `""`                       | Groq API key (free at console.groq.com).                                          |
-| `smartCommit.grokApiKey`        | `string`  | `""`                       | Grok (xAI) API key (from console.x.ai).                                           |
-| `smartCommit.ollamaEndpoint`    | `string`  | `"http://localhost:11434"` | Local Ollama endpoint URL (runs offline, zero API key).                           |
-| `smartCommit.model`             | `string`  | `""`                       | Optional model override (e.g. `gpt-4o`, `deepseek-chat`, `llama3.2`).             |
-| `smartCommit.autoStage`         | `boolean` | `false`                    | Automatically stage all modified files if nothing is staged before generating.    |
-| `smartCommit.confirmBeforePush` | `boolean` | `true`                     | When true: Safe Mode (shows modal). When false: Fast Mode (instant 1-click push). |
-| `smartCommit.baseBranch`        | `string`  | `""`                       | Target base branch for PR generator (auto-detects `main` or `master` if empty).   |
+| Setting                         | Type       | Default                    | Description                                                                                                       |
+| :------------------------------ | :--------- | :------------------------- | :---------------------------------------------------------------------------------------------------------------- |
+| `smartCommit.provider`          | `string`   | `"gemini"`                 | `"gemini"`, `"vscode-lm"`, `"groq"`, `"ollama"`, `"claude"`, `"openai"`, `"openrouter"`, `"deepseek"`, `"grok"`, or `"custom"`. |
+| `smartCommit.model`             | `string`   | `""`                       | Optional model override (e.g. `gpt-4o`, `claude-sonnet-5-5`, `deepseek-chat`, `llama3.2`).                        |
+| `smartCommit.ollamaEndpoint`    | `string`   | `"http://localhost:11434"` | Local Ollama endpoint URL (runs offline, zero API key).                                                           |
+| `smartCommit.customBaseUrl`     | `string`   | `""`                       | Base URL for Custom OpenAI-compatible provider (e.g. `http://localhost:1234/v1`).                                 |
+| `smartCommit.commitLanguage`    | `string`   | `"English"`                | Language for commit descriptions and PR summaries (Conventional Commit prefixes stay in English).                 |
+| `smartCommit.useGitmoji`        | `boolean`  | `false`                    | Prefix generated commit headers with a matching Gitmoji symbol.                                                   |
+| `smartCommit.customPrompt`      | `string`   | `""`                       | Optional extra rules appended to the commit system prompt.                                                        |
+| `smartCommit.excludeFromDiff`   | `string[]` | Lockfiles & build outputs  | Glob patterns excluded from raw diffs sent to AI so lockfiles never crowd out source code changes.                |
+| `smartCommit.autoStage`         | `boolean`  | `false`                    | Automatically stage all modified files if nothing is staged before generating.                                    |
+| `smartCommit.confirmBeforePush` | `boolean`  | `true`                     | When true: Safe Mode (shows modal). When false: Fast Mode (instant 1-click push).                                 |
+| `smartCommit.baseBranch`        | `string`   | `""`                       | Target base branch for PR generator (auto-detects `main` or `master` if empty).                                   |
+| `smartCommit.autoBumpVersion`   | `boolean`  | `true`                     | Automatically calculate and bump semver in `package.json` when syncing to release/publish branches.               |
 
 ---
 
@@ -147,4 +156,4 @@ Open Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`:
 
 ## License
 
-MIT © [Hessam Barasm Mamagani](https://github.com/Hessam-Mamagani)
+GPL-3.0 © [Hessam Barasm Mamagani](https://github.com/Hessam-Mamagani)
