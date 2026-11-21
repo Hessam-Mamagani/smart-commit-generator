@@ -2,6 +2,13 @@
 
 All notable changes to the "Smart Commit Generator AI" extension will be documented in this file.
 
+## [1.5.3] - 2026-11-21
+
+### Added
+- **Anonymous Usage Telemetry (Opt-Out Friendly)**: Added lightweight, privacy-first anonymous telemetry (`smartCommit.enableTelemetry`) to measure active editor distribution and high-level feature usage. Never collects code, diffs, commit messages, repository names, or API keys, and strictly respects both your global IDE telemetry toggle and extension setting.
+
+---
+
 ## [1.5.2] - 2026-11-21
 
 ### Changed

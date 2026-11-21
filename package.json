@@ -2,7 +2,7 @@
   "name": "smart-commit-generator-ai",
   "displayName": "Smart Commit Generator AI",
   "description": "AI Git commit message generator, 1-click push, PR generator & safe branch sync. Supports Built-in IDE AI (Copilot), Free Gemini, Groq, Claude, OpenAI, OpenRouter, DeepSeek, Grok, Ollama & custom endpoints.",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "publisher": "Hessam-Mamagani",
   "author": {
     "name": "Hessam Barasm Mamagani",
@@ -385,6 +385,11 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically calculate and bump semver in package.json when syncing to release/publish branches."
+        },
+        "smartCommit.enableTelemetry": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send anonymous usage counts (IDE name, extension version, OS, and high-level feature usage) to help improve the extension. Never collects code, diffs, commit messages, repo names, or API keys. Respects your global IDE telemetry setting."
         },
         "smartCommit.openaiApiKey": {
           "type": "string",

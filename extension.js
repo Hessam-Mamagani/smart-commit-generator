@@ -6,6 +6,130 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+// Privacy-first anonymous telemetry (zero PII, zero code/diffs/keys; respects IDE & extension opt-out).
+// To activate live analytics: paste your free write-only PostHog project token (phc_...) OR set customEndpoint.
+const TELEMETRY_CONFIG = {
+  posthogHost: "https://eu.i.posthog.com",
+  posthogApiKey: "phc_rUcUXMoU76rVBgFzHfnnymZiqYiMa6bvyJ9qqMNTXE7P",
+  customEndpoint: "",
+};
+
+let telemetryContext = null;
+
+function isTelemetryAllowed() {
+  if (!TELEMETRY_CONFIG.posthogApiKey && !TELEMETRY_CONFIG.customEndpoint) {
+    return false;
+  }
+  if (vscode.env && vscode.env.isTelemetryEnabled === false) {
+    return false;
+  }
+  if (getSetting("enableTelemetry") === false) {
+    return false;
+  }
+  return true;
+}
+
+function getAnonymousTelemetryId() {
+  const raw =
+    (vscode.env && vscode.env.machineId) ||
+    (telemetryContext && telemetryContext.globalState?.get("smartCommit.anonId")) ||
+    "anonymous";
+  return crypto
+    .createHash("sha256")
+    .update(`smart-commit-generator-ai:${raw}`)
+    .digest("hex")
+    .slice(0, 16);
+}
+
+function normalizeIdeName(appName = "") {
+  const lower = String(appName).toLowerCase();
+  if (lower.includes("antigravity")) return "Antigravity";
+  if (lower.includes("cursor")) return "Cursor";
+  if (lower.includes("windsurf")) return "Windsurf";
+  if (lower.includes("vscodium")) return "VSCodium";
+  if (lower.includes("trae")) return "Trae";
+  if (lower.includes("visual studio code")) return "VS Code";
+  return appName || "Unknown";
+}
+
+function sendTelemetryEvent(eventName, extraProps = {}) {
+  try {
+    if (!isTelemetryAllowed()) return;
+
+    const extVersion =
+      telemetryContext?.extension?.packageJSON?.version || "unknown";
+    const properties = {
+      ide: normalizeIdeName(vscode.env?.appName || ""),
+      ext_version: extVersion,
+      vscode_version: vscode.version || "",
+      os: process.platform,
+      ui_lang: vscode.env?.language || "",
+      provider: getSetting("provider") || "gemini",
+      ...extraProps,
+    };
+
+    const distinctId = getAnonymousTelemetryId();
+    const targetUrl = TELEMETRY_CONFIG.customEndpoint
+      ? TELEMETRY_CONFIG.customEndpoint
+      : `${TELEMETRY_CONFIG.posthogHost.replace(/\/+$/, "")}/capture/`;
+
+    const payload = TELEMETRY_CONFIG.customEndpoint
+      ? JSON.stringify({
+          event: eventName,
+          distinct_id: distinctId,
+          properties,
+          timestamp: new Date().toISOString(),
+        })
+      : JSON.stringify({
+          api_key: TELEMETRY_CONFIG.posthogApiKey,
+          event: eventName,
+          distinct_id: distinctId,
+          properties,
+        });
+
+    const urlObj = new URL(targetUrl);
+    const isHttps = urlObj.protocol === "https:";
+    const httpLib = isHttps ? https : http;
+
+    const req = httpLib.request(
+      {
+        protocol: urlObj.protocol,
+        hostname: urlObj.hostname,
+        port: urlObj.port || (isHttps ? 443 : 80),
+        path: urlObj.pathname + (urlObj.search || ""),
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        res.resume();
+      },
+    );
+    req.setTimeout(4000, () => req.destroy());
+    req.on("error", () => {});
+    req.write(payload);
+    req.end();
+  } catch (e) {}
+}
+
+function initTelemetry(context) {
+  telemetryContext = context;
+  try {
+    if (!isTelemetryAllowed()) return;
+    const now = Date.now();
+    const lastPing = Number(
+      context.globalState?.get("smartCommit.lastTelemetryPing") || 0,
+    );
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    if (!lastPing || now - lastPing >= oneDayMs) {
+      context.globalState?.update("smartCommit.lastTelemetryPing", now);
+      sendTelemetryEvent("daily_active");
+    }
+  } catch (e) {}
+}
+
 const DEFAULT_DIFF_EXCLUDES = [
   "package-lock.json",
   "yarn.lock",
@@ -1494,6 +1618,7 @@ function updateStatusBarItem(statusBar) {
 function activate(context) {
   extensionSecrets = context.secrets;
   migrateAllLegacyApiKeys(false).catch(() => {});
+  initTelemetry(context);
 
   // 1. Status Bar Quick Launcher
   const statusBar = vscode.window.createStatusBarItem(
@@ -1686,6 +1811,7 @@ function activate(context) {
             if (msg) {
               repo.inputBox.value = msg;
               notifyAllViews({ commitText: msg });
+              sendTelemetryEvent("feature_used", { feature: "generate_commit" });
               vscode.window.setStatusBarMessage(
                 "Smart Commit: Message updated!",
                 3000,
@@ -1773,10 +1899,12 @@ function activate(context) {
             await runGit(["commit", "-m", msg], cwd);
             if (proceedAction === "Commit & Push") {
               await runGit(["push"], cwd);
+              sendTelemetryEvent("feature_used", { feature: "commit_and_push" });
               vscode.window.showInformationMessage(
                 "Smart Commit: Successfully committed and pushed to remote!",
               );
             } else {
+              sendTelemetryEvent("feature_used", { feature: "commit_only" });
               vscode.window.showInformationMessage(
                 "Smart Commit: Changes committed locally!",
               );
@@ -1946,12 +2074,15 @@ function activate(context) {
         if (choice !== "Sync & Push Now") return;
       }
 
-      await executeBranchSyncAndPush(
+      const synced = await executeBranchSyncAndPush(
         cwd,
         currentBranch,
         targetBranch,
         targetVersion,
       );
+      if (synced) {
+        sendTelemetryEvent("feature_used", { feature: "safe_sync" });
+      }
     },
   );
 
@@ -2075,6 +2206,7 @@ Please generate the full Pull Request description:`;
             });
             await vscode.window.showTextDocument(doc, { preview: false });
 
+            sendTelemetryEvent("feature_used", { feature: "generate_pr" });
             vscode.window.showInformationMessage(
               "Smart Commit: PR Description generated and copied to clipboard!",
             );
@@ -2285,6 +2417,7 @@ Write a comprehensive branch comparison and architecture report:`;
       );
 
       if (!postCompareAction) return;
+      sendTelemetryEvent("feature_used", { feature: "compare_branches" });
 
       if (postCompareAction.type === "conflict") {
         vscode.window
@@ -2482,6 +2615,10 @@ Write a comprehensive branch comparison and architecture report:`;
           selected.value,
           vscode.ConfigurationTarget.Global,
         );
+      sendTelemetryEvent("feature_used", {
+        feature: "switch_provider",
+        provider: selected.value,
+      });
       vscode.window.showInformationMessage(
         `Smart Git: Switched AI provider to ${selected.label.replace(/\$\([^)]+\)\s*/, "")}`,
       );
@@ -2911,10 +3048,12 @@ Write a comprehensive branch comparison and architecture report:`;
             await runGit(["commit", "-m", msg], cwd);
             if (proceedAction === "Commit & Push") {
               await runGit(["push"], cwd);
+              sendTelemetryEvent("feature_used", { feature: "commit_and_push" });
               vscode.window.showInformationMessage(
                 "Smart Commit: Successfully committed and pushed to remote!",
               );
             } else {
+              sendTelemetryEvent("feature_used", { feature: "commit_only" });
               vscode.window.showInformationMessage(
                 "Smart Commit: Changes committed locally!",
               );
@@ -2986,6 +3125,7 @@ Write a comprehensive branch comparison and architecture report:`;
             }
             await runGit(["commit", "-m", commitMsg], cwd);
             repo.inputBox.value = "";
+            sendTelemetryEvent("feature_used", { feature: "commit_only" });
             vscode.window.showInformationMessage(
               "Smart Git: Successfully committed changes!",
             );
@@ -3089,6 +3229,7 @@ Write a comprehensive branch comparison and architecture report:`;
           repo.inputBox.value = lastMsg;
         }
 
+        sendTelemetryEvent("feature_used", { feature: "undo_commit" });
         vscode.window.showInformationMessage(
           `Smart Git: Undid commit [${shortHash || "HEAD"}]! Changes are staged & message restored to edit or regenerate with AI.`,
         );

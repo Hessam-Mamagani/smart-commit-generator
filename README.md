@@ -139,6 +139,7 @@ Open Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`, or 
 | `smartCommit.confirmBeforePush` | `boolean`  | `true`                     | When true: Safe Mode (shows modal). When false: Fast Mode (instant 1-click push).                                 |
 | `smartCommit.baseBranch`        | `string`   | `""`                       | Target base branch for PR generator (auto-detects `main` or `master` if empty).                                   |
 | `smartCommit.autoBumpVersion`   | `boolean`  | `true`                     | Automatically calculate and bump semver in `package.json` when syncing to release/publish branches.               |
+| `smartCommit.enableTelemetry`   | `boolean`  | `true`                     | Send anonymous IDE/version/feature counts (respects global IDE telemetry; never collects code, diffs, or keys).   |
 
 ---
 
@@ -151,6 +152,12 @@ Open Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`, or 
 | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd> | Smart Commit: Safe Branch Sync & Push             |
 | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | Smart Commit: Compare Branches & Conflict Advisor |
 | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd> | <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd> | Smart Commit: Toggle Fast Push / Safe Mode        |
+
+---
+
+## Privacy & Telemetry
+
+Smart Commit Generator AI optionally sends anonymous, privacy-safe usage counts (IDE name, extension version, OS, and high-level feature usage) to understand active adoption across editors. It **never** collects source code, diffs, commit messages, repository names, file paths, or API keys, and strictly respects both your global IDE telemetry setting and `smartCommit.enableTelemetry`.
 
 ---
 
