@@ -2,7 +2,7 @@
 
 [![VS Marketplace](https://vsmarketplacebadges.dev/version/Hessam-Mamagani.smart-commit-generator-ai.svg?style=flat-square&color=blue&label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=Hessam-Mamagani.smart-commit-generator-ai)
 [![Open VSX](https://img.shields.io/open-vsx/v/Hessam-Mamagani/smart-commit-generator-ai?style=flat-square&color=purple&label=Open%20VSX)](https://open-vsx.org/extension/Hessam-Mamagani/smart-commit-generator-ai)
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
+[![License: Proprietary](https://img.shields.io/badge/License-All%20Rights%20Reserved-red.svg?style=flat-square)](LICENSE)
 
 **Fast, accurate, and context-aware Git assistant for VS Code, Cursor, and Antigravity IDE. Generate conventional commits, one-click commit & push, sync branches safely, draft comprehensive Pull Request descriptions, and resolve branch merge conflicts with Built-in IDE AI (Copilot), Google Gemini, Groq, Anthropic Claude, OpenAI, OpenRouter, DeepSeek, Grok (xAI), local Ollama, or any OpenAI-compatible endpoint.**
 
@@ -32,7 +32,7 @@
 - **Multi-AI Engine**: Seamlessly switch between **Google Gemini** (`gemini-3.8-flash`), **Built-in IDE AI / Copilot** (zero API key via `vscode.lm`), **Groq** (ultra-fast LPU), **Ollama** (local, offline, zero API key), **Anthropic Claude** (`claude-haiku-5-5`), **OpenRouter**, **Grok (xAI)**, **DeepSeek**, **OpenAI**, and **Custom OpenAI-Compatible** endpoints (LM Studio, Azure, vLLM, LiteLLM).
 - **Smart Lockfile & Artifact Filtering**: Automatically excludes noisy files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `dist/`, `*.min.js`) from raw diffs so real code changes are never truncated.
 - **Custom Language, Gitmoji & Prompts**: Generate commit messages and PR descriptions in your preferred language, optionally add Gitmoji prefixes, and append team-specific prompt instructions.
-- **Encrypted API Key Storage**: API keys are stored securely in VS Code's encrypted `SecretStorage` (never plaintext `settings.json`). All API calls go directly from your machine to your selected provider with zero intermediate servers.
+- **Encrypted Local Key Storage**: API keys are stored securely using VS Code's built-in encrypted `SecretStorage`. All AI calls go directly from your machine to your selected provider with zero intermediate servers.
 
 ---
 
@@ -70,7 +70,7 @@ Smart Commit Generator AI connects directly to your preferred AI model. Multiple
 | **Grok (xAI)**               | **Pay-As-You-Go** | API key at [xAI Console](https://console.x.ai)                         | `grok-4.20-0309-non-reasoning` | Fast non-reasoning Grok 4 model from xAI.                                |
 | **Custom OpenAI-Compatible** | **Self-Hosted / Any** | Set `smartCommit.customBaseUrl`                                    | `gpt-4o-mini` (overrideable) | Works with LM Studio, Azure OpenAI, vLLM, LiteLLM, or company proxies.     |
 
-> **Security Note**: API keys are stored encrypted using VS Code's built-in **Secret Storage** (`Smart Git: Manage API Keys`). Any legacy keys saved in `settings.json` are automatically migrated and cleared.
+> **Security Note**: API keys are stored securely using VS Code's built-in encrypted **Secret Storage** (`Smart Git: Manage API Keys`). All requests are sent directly from your machine to your chosen provider.
 
 > **Tip for Ollama**: Simply run `ollama run llama3.2` in your terminal and select `"ollama"` as your provider. No API key or internet access required.
 
@@ -156,4 +156,4 @@ Open Settings (<kbd>Ctrl</kbd> + <kbd>,</kbd>) and search for `smartCommit`, or 
 
 ## License
 
-GPL-3.0 © [Hessam Barasm Mamagani](https://github.com/Hessam-Mamagani)
+Proprietary — All Rights Reserved © 2026 [Hessam Barasm Mamagani](https://github.com/Hessam-Mamagani). See [LICENSE](LICENSE) for full terms. Free for end-user installation and use; copying, modification, redistribution, or resale without written permission is prohibited.

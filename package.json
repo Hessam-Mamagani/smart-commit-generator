@@ -2,13 +2,13 @@
   "name": "smart-commit-generator-ai",
   "displayName": "Smart Commit Generator AI",
   "description": "AI Git commit message generator, 1-click push, PR generator & safe branch sync. Supports Built-in IDE AI (Copilot), Free Gemini, Groq, Claude, OpenAI, OpenRouter, DeepSeek, Grok, Ollama & custom endpoints.",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "publisher": "Hessam-Mamagani",
   "author": {
     "name": "Hessam Barasm Mamagani",
     "email": "hessam.mamagani@gmail.com"
   },
-  "license": "GPL-3.0",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "https://github.com/Hessam-Mamagani/smart-commit-generator.git"
@@ -389,32 +389,32 @@
         "smartCommit.openaiApiKey": {
           "type": "string",
           "default": "",
-          "deprecationMessage": "Deprecated for security. Run 'Smart Git: Manage API Keys (Secure Storage)' instead. Keys entered here are automatically migrated to VS Code encrypted Secret Storage and cleared.",
-          "description": "Legacy plaintext OpenAI API Key (automatically migrated to encrypted Secret Storage)."
+          "deprecationMessage": "Use 'Smart Git: Manage API Keys (Secure Storage)' instead.",
+          "description": "Legacy OpenAI API Key setting (automatically synced to Secret Storage)."
         },
         "smartCommit.geminiApiKey": {
           "type": "string",
           "default": "",
-          "deprecationMessage": "Deprecated for security. Run 'Smart Git: Manage API Keys (Secure Storage)' instead. Keys entered here are automatically migrated to VS Code encrypted Secret Storage and cleared.",
-          "description": "Legacy plaintext Google Gemini API Key (automatically migrated to encrypted Secret Storage)."
+          "deprecationMessage": "Use 'Smart Git: Manage API Keys (Secure Storage)' instead.",
+          "description": "Legacy Google Gemini API Key setting (automatically synced to Secret Storage)."
         },
         "smartCommit.deepseekApiKey": {
           "type": "string",
           "default": "",
-          "deprecationMessage": "Deprecated for security. Run 'Smart Git: Manage API Keys (Secure Storage)' instead. Keys entered here are automatically migrated to VS Code encrypted Secret Storage and cleared.",
-          "description": "Legacy plaintext DeepSeek API Key (automatically migrated to encrypted Secret Storage)."
+          "deprecationMessage": "Use 'Smart Git: Manage API Keys (Secure Storage)' instead.",
+          "description": "Legacy DeepSeek API Key setting (automatically synced to Secret Storage)."
         },
         "smartCommit.groqApiKey": {
           "type": "string",
           "default": "",
-          "deprecationMessage": "Deprecated for security. Run 'Smart Git: Manage API Keys (Secure Storage)' instead. Keys entered here are automatically migrated to VS Code encrypted Secret Storage and cleared.",
-          "description": "Legacy plaintext Groq API Key (automatically migrated to encrypted Secret Storage)."
+          "deprecationMessage": "Use 'Smart Git: Manage API Keys (Secure Storage)' instead.",
+          "description": "Legacy Groq API Key setting (automatically synced to Secret Storage)."
         },
         "smartCommit.grokApiKey": {
           "type": "string",
           "default": "",
-          "deprecationMessage": "Deprecated for security. Run 'Smart Git: Manage API Keys (Secure Storage)' instead. Keys entered here are automatically migrated to VS Code encrypted Secret Storage and cleared.",
-          "description": "Legacy plaintext xAI Grok API Key (automatically migrated to encrypted Secret Storage)."
+          "deprecationMessage": "Use 'Smart Git: Manage API Keys (Secure Storage)' instead.",
+          "description": "Legacy xAI Grok API Key setting (automatically synced to Secret Storage)."
         }
       }
     }

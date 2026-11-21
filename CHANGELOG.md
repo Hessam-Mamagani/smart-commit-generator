@@ -2,6 +2,14 @@
 
 All notable changes to the "Smart Commit Generator AI" extension will be documented in this file.
 
+## [1.5.2] - 2026-11-21
+
+### Changed
+- **Proprietary License (All Rights Reserved)**: Updated the software license to a Proprietary End User License Agreement (`SEE LICENSE IN LICENSE`) — free for end-user installation and use while prohibiting unauthorized copying, modification, redistribution, or commercial resale.
+- **Documentation Polish**: Refined README and settings descriptions for clarity.
+
+---
+
 ## [1.5.1] - 2026-11-19
 
 ### Fixed
@@ -13,7 +21,7 @@ All notable changes to the "Smart Commit Generator AI" extension will be documen
 
 ### Added
 - **Activity Bar Changes Counter Badge**: Added a live numeric badge on the Smart Commit Generator AI Activity Bar icon showing the real-time count of uncommitted changes (matching VS Code Source Control), updating automatically on file saves, staging, commits, and repo switches.
-- **Encrypted API Key Storage (`SecretStorage`)**: Migrated API keys out of plaintext `settings.json` into VS Code's encrypted `SecretStorage` with automatic migration and a dedicated `Smart Git: Manage API Keys (Secure Storage)` command.
+- **Encrypted API Key Storage (`SecretStorage`)**: Added native OS-backed encrypted `SecretStorage` support for all AI provider keys and a dedicated `Smart Git: Manage API Keys (Secure Storage)` command.
 - **New AI Providers & Free Default**: Changed default provider from paid OpenAI to Free-tier Google Gemini, and added **Built-in IDE AI (Copilot / `vscode.lm`)**, **Anthropic Claude (`claude-haiku-5-5`)**, **OpenRouter**, and **Custom OpenAI-Compatible** endpoints.
 - **Commit Customizations**: Added `smartCommit.commitLanguage`, `smartCommit.useGitmoji`, and `smartCommit.customPrompt`.
 
